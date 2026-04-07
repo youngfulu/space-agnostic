@@ -1,0 +1,25 @@
+{
+  "name": "space-agnostic",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "compress-images": "node scripts/compress-images.js",
+    "generate-image-list": "node scripts/generate-image-list.js",
+    "generate-thumbnails": "node scripts/generate-thumbnails.js",
+    "prebuild": "npm run compress-images || true",
+    "web-images": "npm run generate-thumbnails && npm run compress-images && npm run generate-image-list"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.0",
+    "sharp": "^0.33.0"
+  }
+}
