@@ -91,7 +91,7 @@ function App() {
         <span className="filter-button" data-tag="tech">technical solutions</span>
         <span className="filter-button" data-tag="concept">concepts</span>
         <span className="filter-button" data-tag="spatial">spatial design</span>
-        <span className="filter-button" id="weAreButton">we are</span>
+        <span className="filter-button" id="weAreButton">it is all about</span>
         <button id="backButton" className="back-button" type="button" style={{ display: 'none' }}>
           ← back
         </button>
@@ -108,7 +108,7 @@ function App() {
           {/* Lines drawn by script.js */}
         </svg>
         <div className="mobile-nav-labels">
-          <div className="mobile-nav-label" data-category="we-are">we are</div>
+          <div className="mobile-nav-label" data-category="we-are">it is all about</div>
           <div className="mobile-nav-label" data-category="stage">stage design</div>
           <div className="mobile-nav-label" data-category="install">installation</div>
           <div className="mobile-nav-label" data-category="tech">technical solutions</div>

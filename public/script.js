@@ -3830,8 +3830,10 @@ function positionFilterButtons() {
         const stageDesignLeft = startX; // Stage design is at 1/3 from left
         const weAreTextWidth = tempCtx.measureText(weAreBtn.textContent).width * scale;
         const scaledSpacingWidth = totalSpacingWidth * scale;
+        // Add a small fixed cushion so long "we are" labels never touch the dash separator
+        const separatorPadding = 10 * scale;
         // Position we are button so that total spacing (3 spaces + 8 dashes + 3 spaces) fits between it and stage design
-        const weAreLeft = stageDesignLeft - scaledSpacingWidth - weAreTextWidth;
+        const weAreLeft = stageDesignLeft - scaledSpacingWidth - weAreTextWidth - separatorPadding;
         weAreBtn.style.left = `${weAreLeft}px`;
         weAreBtn.style.position = 'absolute';
         weAreBtn.style.right = 'auto';
