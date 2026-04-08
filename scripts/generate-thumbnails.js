@@ -29,7 +29,7 @@ function getAllImagePaths(dir, base = dir) {
       results.push(...getAllImagePaths(full, base));
     } else {
       const ext = path.extname(e.name).toLowerCase();
-      if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
+      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif'].includes(ext)) {
         results.push(full);
       }
     }
@@ -94,6 +94,8 @@ async function main() {
         await pipeline.png({ quality: PNG_QUALITY, compressionLevel: 9 }).toFile(thumbPath);
       } else if (ext === '.webp') {
         await pipeline.webp({ quality: 82 }).toFile(thumbPath);
+      } else if (ext === '.avif') {
+        await pipeline.avif({ quality: 55, effort: 5 }).toFile(thumbPath);
       } else if (ext === '.gif') {
         await pipeline.gif().toFile(thumbPath);
       } else {

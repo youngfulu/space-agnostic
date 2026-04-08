@@ -1,0 +1,21 @@
+Built from the concept presented in "Murmur of many voices" and "cicada-nine".
+
+Core idea:
+- Inspired by cicada self-organizing choruses and spatial synchrony in nature.
+- Participants become a decentralized sonic organism through mutual attunement.
+- The work explores collective resonance as a negotiation of rhythm between human, animal, and technological bodies.
+
+Interaction model:
+- Audience joins via web app (prototype: cicada-nine.vercel.app).
+- Tap/hold on mobile triggers cicada-signing simulation and frequency cycles.
+- Screen flicker is synchronized to sound amplitude for visual feedback.
+
+Exhibition setup notes:
+- Designed for offline participatory sessions up to ~30 participants.
+- Dimmed light environment recommended for immersion.
+- Participants' phones form a multichannel sound-space.
+- Includes a "cicada trainer" onboarding moment before the main experience.
+
+Source PDFs used:
+- Murmur of many voices.pdf
+- cicada-nine.pdf
