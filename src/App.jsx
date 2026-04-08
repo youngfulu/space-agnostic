@@ -1,14 +1,17 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 /**
  * React shell: DOM structure for legacy script.js (canvas grid, filters, about).
  */
 function App() {
-  const scriptsLoaded = useRef(false);
-
   useEffect(() => {
-    if (scriptsLoaded.current) return;
-    scriptsLoaded.current = true;
+    // Strict Mode remounts in dev; refs reset but duplicate script.js breaks the canvas (double init).
+    if (typeof window !== 'undefined' && window.__SPACE_AGNOSTIC_LEGACY_BOOT__) {
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.__SPACE_AGNOSTIC_LEGACY_BOOT__ = true;
+    }
 
     // Base path: / for local, /space-agnostic/ for GitHub Pages
     function getBasePath() {

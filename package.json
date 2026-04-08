@@ -10,8 +10,8 @@
     "compress-images": "node scripts/compress-images.js",
     "generate-image-list": "node scripts/generate-image-list.js",
     "generate-thumbnails": "node scripts/generate-thumbnails.js",
-    "prebuild": "npm run compress-images || true",
-    "web-images": "npm run generate-thumbnails && npm run compress-images && npm run generate-image-list"
+    "prebuild": "npm run generate-thumbnails || true",
+    "web-images": "npm run generate-thumbnails && npm run generate-image-list"
   },
   "dependencies": {
     "react": "^18.2.0",
