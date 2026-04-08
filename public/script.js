@@ -1550,6 +1550,29 @@ function shouldKeepHtmlImageForCanvas(path) {
     return /\.gif$/i.test(path);
 }
 
+// Most browsers only advance animated GIF frames for <img> elements that are attached to the document.
+// drawImage() from a detached Image/bitmap typically shows a frozen first frame.
+function ensureCanvasGifPlaybackHost() {
+    if (typeof document === 'undefined') return null;
+    var el = document.getElementById('__canvasGifPlaybackHost');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = '__canvasGifPlaybackHost';
+        el.setAttribute('aria-hidden', 'true');
+        el.style.cssText = 'position:fixed;left:-9999px;top:0;width:8px;height:8px;overflow:hidden;opacity:0.02;pointer-events:none;z-index:0';
+        (document.body || document.documentElement).appendChild(el);
+    }
+    return el;
+}
+
+function pinHtmlImageForGifPlayback(img) {
+    if (!img || img.nodeName !== 'IMG') return;
+    var host = ensureCanvasGifPlaybackHost();
+    if (!host) return;
+    if (img.parentElement === host) return;
+    host.appendChild(img);
+}
+
 function loadImagesWithConcurrency(paths) {
     if (!paths || paths.length === 0) return Promise.resolve();
 
@@ -1620,7 +1643,8 @@ function loadHighresOnce(originalPath) {
         const img = new Image();
         img.onload = async () => {
             try {
-                if (typeof img.decode === 'function') {
+                var isGifHigh = shouldKeepHtmlImageForCanvas(highresPath) || shouldKeepHtmlImageForCanvas(originalPath);
+                if (typeof img.decode === 'function' && !isGifHigh) {
                     try { await img.decode(); } catch (_) {}
                 }
                 let drawable = img;
@@ -1636,6 +1660,7 @@ function loadHighresOnce(originalPath) {
                     entry.width = drawable.width || img.naturalWidth;
                     entry.height = drawable.height || img.naturalHeight;
                     entry.aspectRatio = (entry.width && entry.height) ? entry.width / entry.height : entry.aspectRatio;
+                    if (isGifHigh && drawable && drawable.nodeName === 'IMG') pinHtmlImageForGifPlayback(drawable);
                     scheduleAlignedDesktopRelayoutIfNeeded(originalPath);
                     scheduleAlignedMobileRelayoutIfNeeded(originalPath);
                 }
@@ -1693,14 +1718,15 @@ function loadImageOnce(path, useThumb, skipProgress) {
 
         img.onload = async () => {
             try {
-            if (typeof img.decode === 'function') {
+                var isGifPath = shouldKeepHtmlImageForCanvas(path);
+                if (typeof img.decode === 'function' && !isGifPath) {
                     try { await img.decode(); } catch {}
                 }
                 var drawable = img;
                 var width = img.naturalWidth;
                 var height = img.naturalHeight;
                 var isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window));
-                if (!isMobile && typeof createImageBitmap === 'function' && !shouldKeepHtmlImageForCanvas(path)) {
+                if (!isMobile && typeof createImageBitmap === 'function' && !isGifPath) {
                     try {
                         var bitmap = await createImageBitmap(img, { imageOrientation: 'from-image' });
                         drawable = bitmap;
@@ -1725,6 +1751,7 @@ function loadImageOnce(path, useThumb, skipProgress) {
                     entry.aspectRatio = width / height;
                 }
                 entry.error = false;
+                if (isGifPath && drawable && drawable.nodeName === 'IMG') pinHtmlImageForGifPlayback(drawable);
 
                 if (!skipProgress) {
             imagesLoaded++;
