@@ -1544,33 +1544,87 @@ function loadImages() {
     }, MAX_LOADING_SCREEN_WAIT_MS);
 }
 
-// createImageBitmap captures only the first frame of GIFs; keep HTMLImageElement so the draw loop can animate them.
+// createImageBitmap captures only the first frame of GIFs; keep HTMLImageElement in cache.
 function shouldKeepHtmlImageForCanvas(path) {
     if (!path || typeof path !== 'string') return false;
     return /\.gif$/i.test(path);
 }
 
-// Most browsers only advance animated GIF frames for <img> elements that are attached to the document.
-// drawImage() from a detached Image/bitmap typically shows a frozen first frame.
-function ensureCanvasGifPlaybackHost() {
+// Canvas 2D drawImage() is required by the HTML spec to use only the default/first frame for animated GIFs.
+// Real playback needs actual <img> elements stacked above the canvas (see draw loop).
+let __gifOverlayLayer = null;
+let __gifOverlayPool = [];
+let __gifOverlayActive = 0;
+
+function ensureGifOverlayLayer() {
     if (typeof document === 'undefined') return null;
-    var el = document.getElementById('__canvasGifPlaybackHost');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = '__canvasGifPlaybackHost';
-        el.setAttribute('aria-hidden', 'true');
-        el.style.cssText = 'position:fixed;left:-9999px;top:0;width:8px;height:8px;overflow:hidden;opacity:0.02;pointer-events:none;z-index:0';
-        (document.body || document.documentElement).appendChild(el);
-    }
+    if (__gifOverlayLayer) return __gifOverlayLayer;
+    const el = document.createElement('div');
+    el.id = 'canvasGifOverlayLayer';
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2;overflow:visible';
+    (document.body || document.documentElement).appendChild(el);
+    __gifOverlayLayer = el;
     return el;
 }
 
-function pinHtmlImageForGifPlayback(img) {
-    if (!img || img.nodeName !== 'IMG') return;
-    var host = ensureCanvasGifPlaybackHost();
-    if (!host) return;
-    if (img.parentElement === host) return;
-    host.appendChild(img);
+function gifOverlayFrameReset() {
+    __gifOverlayActive = 0;
+}
+
+function gifOverlayHideUnused() {
+    for (let i = __gifOverlayActive; i < __gifOverlayPool.length; i++) {
+        __gifOverlayPool[i].style.display = 'none';
+    }
+}
+
+function worldBoxToClientRect(centerWorldX, centerWorldY, drawW, drawH) {
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const sx = (centerWorldX - centerX) * globalZoomLevel + centerX + cameraPanX;
+    const sy = (centerWorldY - centerY) * globalZoomLevel + centerY + cameraPanY;
+    const cw = drawW * globalZoomLevel;
+    const ch = drawH * globalZoomLevel;
+    const r = canvas.getBoundingClientRect();
+    const scaleX = r.width / Math.max(1, canvas.width);
+    const scaleY = r.height / Math.max(1, canvas.height);
+    return {
+        left: r.left + (sx - cw / 2) * scaleX,
+        top: r.top + (sy - ch / 2) * scaleY,
+        width: Math.max(1, cw * scaleX),
+        height: Math.max(1, ch * scaleY),
+    };
+}
+
+function placeGifOverlayClone(sourceImg, centerWorldX, centerWorldY, drawW, drawH, opacity, stackOrder) {
+    if (!sourceImg || sourceImg.nodeName !== 'IMG' || !canvas) return;
+    ensureGifOverlayLayer();
+    const srcUrl = sourceImg.currentSrc || sourceImg.src || '';
+    if (!srcUrl) return;
+    let slot = __gifOverlayPool[__gifOverlayActive];
+    if (!slot) {
+        slot = document.createElement('img');
+        slot.alt = '';
+        slot.draggable = false;
+        slot.style.position = 'fixed';
+        slot.style.objectFit = 'fill';
+        slot.style.pointerEvents = 'none';
+        __gifOverlayLayer.appendChild(slot);
+        __gifOverlayPool.push(slot);
+    }
+    __gifOverlayActive++;
+    if (slot.dataset.gifSrc !== srcUrl) {
+        slot.src = srcUrl;
+        slot.dataset.gifSrc = srcUrl;
+    }
+    const b = worldBoxToClientRect(centerWorldX, centerWorldY, drawW, drawH);
+    slot.style.left = b.left + 'px';
+    slot.style.top = b.top + 'px';
+    slot.style.width = b.width + 'px';
+    slot.style.height = b.height + 'px';
+    slot.style.opacity = String(opacity);
+    slot.style.display = 'block';
+    slot.style.zIndex = String(100 + (stackOrder | 0));
 }
 
 function loadImagesWithConcurrency(paths) {
@@ -1660,7 +1714,6 @@ function loadHighresOnce(originalPath) {
                     entry.width = drawable.width || img.naturalWidth;
                     entry.height = drawable.height || img.naturalHeight;
                     entry.aspectRatio = (entry.width && entry.height) ? entry.width / entry.height : entry.aspectRatio;
-                    if (isGifHigh && drawable && drawable.nodeName === 'IMG') pinHtmlImageForGifPlayback(drawable);
                     scheduleAlignedDesktopRelayoutIfNeeded(originalPath);
                     scheduleAlignedMobileRelayoutIfNeeded(originalPath);
                 }
@@ -1751,7 +1804,6 @@ function loadImageOnce(path, useThumb, skipProgress) {
                     entry.aspectRatio = width / height;
                 }
                 entry.error = false;
-                if (isGifPath && drawable && drawable.nodeName === 'IMG') pinHtmlImageForGifPlayback(drawable);
 
                 if (!skipProgress) {
             imagesLoaded++;
@@ -4207,6 +4259,8 @@ function draw() {
         // Only draw black background while words are loading
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        gifOverlayFrameReset();
+        gifOverlayHideUnused();
         return;
     }
     
@@ -4615,6 +4669,8 @@ function draw() {
     const scaledMouseXForHover = ((smoothMouseX - centerX - cameraPanX) / globalZoomLevel) + centerX;
     const scaledMouseYForHover = ((smoothMouseY - centerY - cameraPanY) / globalZoomLevel) + centerY;
     const currentTime = performance.now(); // Cache current time to avoid repeated calls
+
+    gifOverlayFrameReset();
     
     // Sort points by opacity before drawing: non-selected (low opacity) first, then selected (high opacity)
     // This ensures selected images always appear on top
@@ -4640,7 +4696,7 @@ function draw() {
     });
     
     // Draw all points in sorted order (non-selected first, selected on top)
-    sortedPoints.forEach(point => {
+    sortedPoints.forEach((point, sortIndex) => {
         const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
         
         // Animate opacity (optimized: skip if already at target)
@@ -4867,6 +4923,11 @@ function draw() {
             
             const halfWidth = drawWidth / 2;
             const halfHeight = drawHeight / 2;
+
+            // Animated GIF: canvas 2d only ever paints the first frame (HTML spec). Selection/filter uses DOM <img> clones.
+            const isGifHtml = shouldKeepHtmlImageForCanvas(point.imagePath) && img.nodeName === 'IMG';
+            const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedEmojis.some((a) => a && a.imagePath === point.imagePath));
+            const useGifDomOverlay = isGifHtml && (isSelectionRowImage || point.isFiltered || selectionAnimationPhase !== 0);
             
             // Infinite carousel: draw aligned images in three positions (left copy, main, right copy)
             const drawOffsets = (point.isAligned && !isMobileDevice() && alignedRowTotalWidthWorld > 0)
@@ -4876,7 +4937,11 @@ function draw() {
             try {
                 for (let i = 0; i < drawOffsets.length; i++) {
                     const drawX = x + drawOffsets[i];
-                    ctx.drawImage(img, drawX - halfWidth, y - halfHeight, drawWidth, drawHeight);
+                    if (useGifDomOverlay) {
+                        placeGifOverlayClone(img, drawX, y, drawWidth, drawHeight, ctx.globalAlpha, sortIndex * 32 + i);
+                    } else {
+                        ctx.drawImage(img, drawX - halfWidth, y - halfHeight, drawWidth, drawHeight);
+                    }
                 }
             } catch (e) {
                 // If drawImage fails, skip drawing
@@ -5079,6 +5144,8 @@ function draw() {
             aboutEl.style.display = 'block';
         }
     }
+
+    gifOverlayHideUnused();
 }
 
 // Animation loop (pauses when tab hidden to save CPU/battery)
