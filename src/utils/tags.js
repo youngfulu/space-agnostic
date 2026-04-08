@@ -4,11 +4,11 @@
  */
 
 export const HASHTAG_MAP = {
-    stage: '#stage',
-    install: '#installation',
-    concept: '#concept',
-    tech: '#tech',
-    spatial: '#spatial',
+    stage: '#see',
+    install: '#exp',
+    concept: '#make',
+    tech: '#sound',
+    spatial: '#perf',
 };
 
 export const FOLDER_TAGS = {
@@ -44,12 +44,13 @@ export const FOLDER_TAGS = {
 export function deriveTagsFromFolderName(folderNameRaw) {
     const name = (folderNameRaw || '').toLowerCase();
     const tags = [];
-    if (name.includes('#stage')) tags.push('stage');
+    if (name.includes('#stage') || name.includes('#see')) tags.push('stage');
     if (name.includes('#installation') || name.includes('#instalation') || name.includes('#instal'))
         tags.push('installation');
-    if (name.includes('#concept')) tags.push('concept');
-    if (name.includes('#tech')) tags.push('tech');
-    if (name.includes('#spatial')) tags.push('spatial');
+    if (name.includes('#exp')) tags.push('installation');
+    if (name.includes('#concept') || name.includes('#make')) tags.push('concept');
+    if (name.includes('#tech') || name.includes('#sound')) tags.push('tech');
+    if (name.includes('#spatial') || name.includes('#perf')) tags.push('spatial');
     return tags;
 }
 

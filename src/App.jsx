@@ -89,11 +89,11 @@ function App() {
       </div>
 
       <div id="filterButtons" className="filter-buttons">
-        <span className="filter-button" data-tag="stage">stage design</span>
-        <span className="filter-button" data-tag="install">installation</span>
-        <span className="filter-button" data-tag="tech">technical solutions</span>
-        <span className="filter-button" data-tag="concept">concepts</span>
-        <span className="filter-button" data-tag="spatial">spatial design</span>
+        <span className="filter-button" data-tag="stage">visual research</span>
+        <span className="filter-button" data-tag="install">explore</span>
+        <span className="filter-button" data-tag="tech">space n sound</span>
+        <span className="filter-button" data-tag="concept">make</span>
+        <span className="filter-button" data-tag="spatial">perform</span>
         <span className="filter-button" id="weAreButton">it is all about</span>
         <button id="backButton" className="back-button" type="button" style={{ display: 'none' }}>
           ← back
@@ -112,10 +112,10 @@ function App() {
         </svg>
         <div className="mobile-nav-labels">
           <div className="mobile-nav-label" data-category="we-are">it is all about</div>
-          <div className="mobile-nav-label" data-category="stage">stage design</div>
-          <div className="mobile-nav-label" data-category="install">installation</div>
-          <div className="mobile-nav-label" data-category="tech">technical solutions</div>
-          <div className="mobile-nav-label" data-category="spatial">spatial design</div>
+          <div className="mobile-nav-label" data-category="install">explore</div>
+          <div className="mobile-nav-label" data-category="tech">space n sound</div>
+          <div className="mobile-nav-label" data-category="stage">visual research</div>
+          <div className="mobile-nav-label" data-category="spatial">perform</div>
         </div>
       </div>
 

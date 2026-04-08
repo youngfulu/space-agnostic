@@ -610,7 +610,7 @@ function layoutAlignedEmojisDesktop(animate = true) {
     // Desktop selection:
     // - Images have equal WIDTH (scale proportionally)
     // - Selection occupies the LEFT 2/3 of the screen
-    // - Images scaled so row height = 2/5 of vertical screen space
+    // - Images scaled so row height = 2/3 of vertical screen space
     const horizontalGap = 35;
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
@@ -618,19 +618,12 @@ function layoutAlignedEmojisDesktop(animate = true) {
     const regionLeft = 40;
     const regionRight = (canvas.width * 2) / 3 - 40;
     const regionWidth = Math.max(1, regionRight - regionLeft);
-    const SELECTION_ROW_HEIGHT_FRACTION = (2 / 5) * 1.25; // row height = 2/5 of viewport, +25% min size
+    const SELECTION_ROW_HEIGHT_FRACTION = 2 / 3;
     const targetRowHeightScreen = canvas.height * SELECTION_ROW_HEIGHT_FRACTION;
 
-    // Find max aspect ratio so we can cap width if row would overflow region
-    let maxAspectRatio = 0;
-    alignedEmojis.forEach(point => {
-        const imageData = imageCache[point.imagePath];
-        const ar = (imageData && imageData.aspectRatio) ? imageData.aspectRatio : 1;
-        maxAspectRatio = Math.max(maxAspectRatio, ar > 0 ? ar : 1);
-    });
-    // Use 2/5 of screen height; scale down only if row would exceed region width
-    const targetHeightScreen = Math.min(targetRowHeightScreen, regionWidth / maxAspectRatio);
-    const targetHeightWorld = targetHeightScreen; // zoom=1 baseline; we will zoom out if needed
+    // Row image height = 2/3 viewport; zoom/pan fits the strip (wide panoramas no longer shrink height)
+    const targetHeightScreen = targetRowHeightScreen;
+    const targetHeightWorld = targetHeightScreen; // zoom=1 baseline; we pan/zoom to fit
 
     const imageHeights = [];
     const imageWidths = [];
@@ -817,9 +810,8 @@ function scheduleAlignedMobileRelayoutIfNeeded(changedImagePath = null) {
 
 /**
  * Lays out aligned emojis in a vertical column for mobile selection mode.
- * Images are aligned to the left edge (35px margin), have equal max dimensions,
- * and are limited to 65% of screen width. All images are scaled to the same
- * maximum dimension (width or height, whichever is larger).
+ * Images use the horizontal content width but are capped so height is at most
+ * 2/3 of the viewport (then width scales with aspect ratio).
  * 
  * @param {boolean} [animate=true] - Whether to animate the layout transition
  */
@@ -835,24 +827,27 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
     const marginScreen = Math.max(14, canvas.width * 0.04);
     const paddingScreen = marginScreen;
     const targetWidthScreen = canvas.width - 2 * marginScreen;
+    const maxImageHeightScreen = canvas.height * (2 / 3);
     const gapScreen = MOBILE_SELECTION_VERTICAL_GAP;
     const topPaddingScreen = marginScreen;
 
-    const targetWidthWorld = targetWidthScreen / selectedZoom;
     const gapWorld = gapScreen / selectedZoom;
     const topPaddingWorld = topPaddingScreen / selectedZoom;
     const centerX = canvas.width / 2;
 
     const widths = [];
     const heights = [];
-    // Mobile: no +25% (desktop keeps +25% in layoutAlignedEmojisDesktop)
     alignedEmojis.forEach(point => {
         const imageData = imageCache[point.imagePath];
         const ar = (imageData && imageData.aspectRatio) ? imageData.aspectRatio : 1;
-        const widthWorld = targetWidthWorld;
-        const heightWorld = widthWorld / (ar > 0 ? ar : 1);
-        widths.push(widthWorld);
-        heights.push(heightWorld);
+        let widthScreen = targetWidthScreen;
+        let heightScreen = widthScreen / (ar > 0 ? ar : 1);
+        if (heightScreen > maxImageHeightScreen) {
+            heightScreen = maxImageHeightScreen;
+            widthScreen = heightScreen * ar;
+        }
+        widths.push(widthScreen / selectedZoom);
+        heights.push(heightScreen / selectedZoom);
     });
 
     // Measure about block (name + info) height for slot above first image
@@ -1001,11 +996,11 @@ let indexModeTag = null; // Current hashtag being filtered
 
 // Hashtag to category mapping
 const HASHTAG_MAP = {
-    'stage': '#stage',
-    'install': '#installation',
-    'concept': '#concept',
-    'tech': '#tech',
-    'spatial': '#spatial'
+    'stage': '#see',
+    'install': '#exp',
+    'concept': '#make',
+    'tech': '#sound',
+    'spatial': '#perf'
 };
 
 // Folder name to tags mapping (since imagePaths don't include hashtags)
@@ -1044,11 +1039,11 @@ const FOLDER_TAGS = {
 function deriveTagsFromFolderName(folderNameRaw) {
     const name = (folderNameRaw || '').toLowerCase();
     const tags = [];
-    if (name.includes('#stage')) tags.push('stage');
-    if (name.includes('#installation') || name.includes('#instalation') || name.includes('#instal')) tags.push('installation');
-    if (name.includes('#concept')) tags.push('concept');
-    if (name.includes('#tech')) tags.push('tech');
-    if (name.includes('#spatial')) tags.push('spatial');
+    if (name.includes('#stage') || name.includes('#see')) tags.push('stage');
+    if (name.includes('#installation') || name.includes('#instalation') || name.includes('#instal') || name.includes('#exp')) tags.push('installation');
+    if (name.includes('#concept') || name.includes('#make')) tags.push('concept');
+    if (name.includes('#tech') || name.includes('#sound')) tags.push('tech');
+    if (name.includes('#spatial') || name.includes('#perf')) tags.push('spatial');
     return tags;
 }
 
@@ -1163,27 +1158,12 @@ const imagePaths = [
     'Chertochki /photo_2024-05-11_21-43-51.jpg',
     'Chertochki /photo_2024-05-20_21-16-49.jpg',
     'Chertochki /photo_2025-03-19_21-49-03.jpg',
-    'Chertochki /photo_2025-03-20_17-25-43.png',
-    'Cicada simulation /Murmur of many voices — slide 01.png',
-    'Cicada simulation /Murmur of many voices — slide 02.png',
-    'Cicada simulation /Murmur of many voices — slide 03.png',
-    'Cicada simulation /Murmur of many voices — slide 04.png',
-    'Cicada simulation /Murmur of many voices — slide 05.png',
-    'Cicada simulation /cicada-nine — slide 01.png',
     'Cicada simulation /cicada-nine — slide 02.png',
-    'Cicada simulation /cicada-nine — slide 03.png',
-    'Cicada simulation /cicada-nine — slide 04.png',
     'Cicada simulation /cicada-nine — slide 05.png',
     'Cicada simulation /cicada-nine — slide 06.png',
     'Cicada simulation /cicada-nine — slide 07.png',
-    'Cicada simulation /cicada-nine — slide 08.png',
     'Cicada simulation /cicada-nine — slide 09.png',
-    'Cicada simulation /cicada-nine — slide 10.png',
-    'Cicada simulation /cicada-nine — slide 11.png',
-    'Cicada simulation /cicada-nine — slide 12.png',
-    'Cicada simulation /cicada-nine — slide 13.png',
     'Cicada simulation /cicada-nine — slide 14.png',
-    'Cicada simulation /cicada-nine — slide 15.png',
     'Cicada simulation /png-transparent-cicada.png',
     'Circular Repetition   #instal/CR.png',
     'Circular Repetition   #instal/ComfyUI_00006_bw.png',
@@ -1199,9 +1179,18 @@ const imagePaths = [
     'Empreian Tiflis/Screen Shot 2018-10-25 at 15.09.43.png',
     'Empreian Tiflis/Screen Shot 2018-10-25 at 15.12.25.png',
     'Empreian Tiflis/tiflis.webp',
+    'Ergamo/120fps_final_00004.png',
+    'Ergamo/16fps_00006.png',
+    'Ergamo/16fps_00011.png',
+    'Ergamo/16fps_00020.png',
+    'Ergamo/30fps_final_00001.png',
+    'Ergamo/AnimateDiff_00004.png',
     'Flora/Screenshot 2026-04-07 at 17.17.55.png',
     'Flora/photo_2021-07-25_01-23-59.jpg',
+    'Ghosted/Ghosted.gif',
+    'Ghosted/IG walk .gif',
     'Ghosted/IG walk _poster.jpg',
+    'Ghosted/ig-club.gif',
     'Ghosted/ig-club_poster.jpg',
     'Marche Nocturn /IMG_0457.jpg',
     'Marche Nocturn /IMG_0458.jpg',
@@ -1219,7 +1208,6 @@ const imagePaths = [
     'Middle east/IMG_8720_10mb.gif',
     'Nat.sim /ComfyUI_00062_.png',
     'Nat.sim /IMG_4385.jpeg',
-    'Nat.sim /Screenshot 2025-04-13 at 20.39.59.png',
     'Nat.sim /Spat5Move.gif',
     'Nat.sim /nat.sim.gif',
     'Nat.sim /photo_2025-04-13_20-02-40.jpg',
@@ -1229,14 +1217,12 @@ const imagePaths = [
     'Psyche/pasted-image.png',
     'Screenshot 2023-07-11 at 23.47.11_result.png',
     'Shapes/photo_2022-09-09_18-36-57.jpg',
-    'Shapes/photo_2022-09-10_11-32-25.jpg',
     'Shapes/photo_2022-09-10_11-32-26.jpg',
     'Shapes/photo_2022-09-11_20-12-15.jpg',
     'Shapes/photo_2022-09-11_20-12-19.jpg',
     'Shapes/photo_2022-09-11_21-38-30.jpg',
     'Shapes/photo_2022-09-11_21-38-31.jpg',
     'Shapes/photo_2022-09-11_22-07-05.jpg',
-    'Spectral shapes/IMG_7073 2.jpg',
     'Spectral shapes/IMG_9007.jpeg',
     'Spectral shapes/IMG_9142.jpeg',
     'Spectral shapes/Screenshot 2021-12-01 at 22.03.57.png',
@@ -1288,136 +1274,36 @@ const imagePaths = [
     'cultural issues/c1.jpg',
     'cultural issues/c2.jpg',
     'cultural issues/c3.jpg',
-    'ex_m6/A/20240314_180920_resized.jpg',
-    'ex_m6/A/Photo027.jpg',
     'ex_m6/IMG_1365.jpeg',
     'ex_m6/IMG_1388.jpeg',
     'ex_m6/Screenshot 2024-02-27 at 23.59.20.png',
-    'ex_m6/beta1 — slide 01.jpg',
-    'ex_m6/beta1 — slide 02.jpg',
-    'ex_m6/beta1 — slide 03.jpg',
-    'ex_m6/beta1 — slide 04.jpg',
-    'ex_m6/beta1 — slide 05.jpg',
-    'ex_m6/beta1 — slide 06.jpg',
-    'ex_m6/beta1 — slide 07.jpg',
-    'ex_m6/beta1 — slide 08.jpg',
-    'ex_m6/beta1 — slide 09.jpg',
-    'ex_m6/beta1 — slide 10.jpg',
-    'ex_m6/beta1 — slide 11.jpg',
-    'ex_m6/beta1 — slide 12.jpg',
-    'ex_m6/beta1 — slide 13.jpg',
-    'ex_m6/beta1 — slide 14.jpg',
-    'ex_m6/beta1 — slide 15.jpg',
-    'ex_m6/beta1 — slide 16.jpg',
-    'ex_m6/beta1 — slide 17.jpg',
-    'ex_m6/beta1 — slide 18.jpg',
-    'ex_m6/beta1 — slide 19.jpg',
-    'ex_m6/beta1 — slide 20.jpg',
-    'ex_m6/beta1 — slide 21.jpg',
-    'ex_m6/beta1 — slide 22.jpg',
-    'ex_m6/beta1 — slide 23.jpg',
-    'ex_m6/beta1 — slide 24.jpg',
-    'ex_m6/beta1 — slide 25.jpg',
-    'ex_m6/beta1 — slide 26.jpg',
-    'ex_m6/beta1 — slide 27.jpg',
-    'ex_m6/beta1 — slide 28.jpg',
-    'ex_m6/beta1 — slide 29.jpg',
-    'ex_m6/beta1 — slide 30.jpg',
-    'ex_m6/beta1 — slide 31.jpg',
-    'ex_m6/beta1 — slide 32.jpg',
-    'ex_m6/beta1 — slide 33.jpg',
-    'ex_m6/beta1 — slide 34.jpg',
-    'ex_m6/beta1 — slide 35.jpg',
-    'ex_m6/beta1 — slide 36.jpg',
-    'ex_m6/beta1 — slide 37.jpg',
-    'ex_m6/beta1 — slide 38.jpg',
-    'ex_m6/beta1 — slide 39.jpg',
-    'ex_m6/beta1 — slide 40.jpg',
-    'ex_m6/beta1 — slide 41.jpg',
-    'ex_m6/beta1 — slide 42.jpg',
-    'ex_m6/beta1 — slide 43.jpg',
-    'ex_m6/beta1 — slide 44.jpg',
-    'ex_m6/beta1 — slide 45.jpg',
     'ex_m6/exm_book comp — slide 01.jpg',
     'ex_m6/exm_book comp — slide 02.jpg',
-    'ex_m6/exm_book comp — slide 03.jpg',
     'ex_m6/exm_book comp — slide 04.jpg',
-    'ex_m6/exm_book comp — slide 05.jpg',
-    'ex_m6/exm_book comp — slide 06.jpg',
-    'ex_m6/exm_book comp — slide 07.jpg',
-    'ex_m6/exm_book comp — slide 08.jpg',
-    'ex_m6/exm_book comp — slide 09.jpg',
-    'ex_m6/exm_book comp — slide 10.jpg',
-    'ex_m6/exm_book comp — slide 11.jpg',
-    'ex_m6/exm_book comp — slide 12.jpg',
-    'ex_m6/exm_book comp — slide 13.jpg',
-    'ex_m6/exm_book comp — slide 14.jpg',
-    'ex_m6/exm_book comp — slide 15.jpg',
-    'ex_m6/exm_book comp — slide 16.jpg',
-    'ex_m6/exm_book comp — slide 17.jpg',
-    'ex_m6/exm_book comp — slide 18.jpg',
-    'ex_m6/exm_book comp — slide 19.jpg',
-    'ex_m6/exm_book comp — slide 20.jpg',
-    'ex_m6/exm_book comp — slide 21.jpg',
-    'ex_m6/exm_book comp — slide 22.jpg',
-    'ex_m6/exm_book comp — slide 23.jpg',
-    'ex_m6/exm_book comp — slide 24.jpg',
-    'ex_m6/exm_book comp — slide 25.jpg',
-    'ex_m6/exm_book comp — slide 26.jpg',
-    'ex_m6/exm_book comp — slide 27.jpg',
-    'ex_m6/exm_book comp — slide 28.jpg',
-    'ex_m6/exm_book comp — slide 29.jpg',
-    'ex_m6/exm_book comp — slide 30.jpg',
-    'ex_m6/exm_book comp — slide 31.jpg',
-    'ex_m6/exm_book comp — slide 32.jpg',
-    'ex_m6/exm_book comp — slide 33.jpg',
-    'ex_m6/exm_book comp — slide 34.jpg',
-    'ex_m6/exm_book comp — slide 35.jpg',
-    'ex_m6/exm_book comp — slide 36.jpg',
-    'ex_m6/exm_book comp — slide 37.jpg',
-    'ex_m6/exm_book comp — slide 38.jpg',
-    'ex_m6/exm_book comp — slide 39.jpg',
-    'ex_m6/exm_book comp — slide 40.jpg',
-    'ex_m6/exm_book comp — slide 41.jpg',
-    'ex_m6/exm_book comp — slide 42.jpg',
-    'ex_m6/exm_book comp — slide 43.jpg',
-    'ex_m6/exm_book comp — slide 44.jpg',
-    'ex_m6/exm_book comp — slide 45.jpg',
-    'ex_m6/exm_book comp — slide 46.jpg',
-    'ex_m6/exm_book comp — slide 47.jpg',
-    'ex_m6/exm_book comp — slide 48.jpg',
-    'ex_m6/exm_book comp — slide 49.jpg',
-    'ex_m6/exm_book comp — slide 50.jpg',
-    'ex_m6/exm_book comp — slide 51.jpg',
     'ex_m6/exm_book comp — slide 52.jpg',
     'ex_m6/exm_book comp — slide 53.jpg',
     'ex_m6/exm_book comp — slide 54.jpg',
-    'ex_m6/exm_book comp — slide 55.jpg',
-    'ex_m6/exm_book comp — slide 56.jpg',
-    'ex_m6/exm_book comp — slide 57.jpg',
-    'ex_m6/exm_book comp — slide 58.jpg',
-    'ex_m6/exm_book comp — slide 59.jpg',
-    'ex_m6/exm_book comp — slide 60.jpg',
-    'ex_m6/exm_book comp — slide 61.jpg',
-    'ex_m6/exm_book comp — slide 62.jpg',
     'ex_m6/exm_book_comp_part1.gif',
     'ex_m6/exm_book_comp_part2.gif',
     'ex_m6/pasted-image-3.png',
     'ex_m6/photo_2024-03-03_21-39-45.jpg',
+    'extractive memories/2023-08-28--20-20-00.gif',
     'extractive memories/2023-08-28--20-20-00_poster.jpg',
+    'extractive memories/2023-11-19--13-29-55.gif',
     'extractive memories/2023-11-19--13-29-55_poster.jpg',
     'extractive memories/2023-11-27--19-13-04_poster.jpg',
+    'extractive memories/2023-11-27--20-11-28.gif',
     'extractive memories/2023-11-27--20-11-28_poster.jpg',
+    'extractive memories/2023-11-29--01-01-18.gif',
     'extractive memories/2023-11-29--01-01-18_poster.jpg',
     'extractive memories/2023-12-06--16-57-24_poster.jpg',
     'extractive memories/2023-12-06--16-58-42-2_poster.jpg',
+    'extractive memories/2023-12-06--18-07-53.gif',
     'extractive memories/2023-12-06--18-07-53_poster.jpg',
     'extractive memories/2023-12-06--18-55-00_poster.jpg',
     'extractive memories/Screenshot 2024-10-13 at 03.18.05.png',
     'extractive memories/exm_ — slide 01.jpg',
     'extractive memories/exm_ — slide 02.jpg',
-    'extractive memories/exm_ — slide 03.jpg',
-    'extractive memories/exm_ — slide 04.jpg',
     'extractive memories/exm_ — slide 05.jpg',
     'extractive memories/exm_ — slide 06.jpg',
     'extractive memories/nobodyfeelingtears__poster.jpg',
@@ -1428,7 +1314,11 @@ const imagePaths = [
     'sculpture/Screenshot 2022-02-16 at 13.16.32.png',
     'waevaev/a2471434847_1x1_700.jpg',
     'waevaev/a3791641340_1x1_700.jpg',
-    'waevaev/a4276255458_1x1_700.jpg'
+    'waevaev/a4276255458_1x1_700.jpg',
+    'walker/5.jpg',
+    'walker/6.1.jpg',
+    'walker/prev-1.jpg',
+    'walker/prev-2.png'
 ];
 
 // Image cache: thumb = grid (small), img = full-res (selection mode). Draw uses img || thumb.
@@ -2096,7 +1986,7 @@ function generatePoints(count, minDistance) {
 }
 
 // Grid point count: cap so all points fit with minDistance
-const GRID_POINT_COUNT = Math.min(imagePaths.length, 500);
+const GRID_POINT_COUNT = imagePaths.length;
 const points = generatePoints(GRID_POINT_COUNT, 50);
 
 // Initialize current sizes and opacity for all points
@@ -3209,6 +3099,47 @@ function exitConnectionMode() {
     updateBackButtonVisibility();
 }
 
+/** Folder path for an image path (root files → "final images"). */
+function normalizeFolderPathFromImagePath(imagePath) {
+    if (!imagePath || !imagePath.includes('/')) return 'final images';
+    const folder = imagePath.substring(0, imagePath.lastIndexOf('/'));
+    if (folder === '' || folder === imagePath) return 'final images';
+    return folder;
+}
+
+/**
+ * Folder selection shows every file under Artsy for that folder (imagePaths), not only grid points.
+ * @param {string} folderPath
+ * @param {object[]} folderPoints — points from the main grid in this folder
+ */
+function mergeFolderImagesWithAllPaths(folderPath, folderPoints) {
+    const inGrid = new Set(folderPoints.map((p) => p.imagePath));
+    const allInFolder = imagePaths.filter((path) => normalizeFolderPathFromImagePath(path) === folderPath);
+    const extras = [];
+    allInFolder.forEach((path) => {
+        if (inGrid.has(path)) return;
+        extras.push({
+            imagePath: path,
+            folderPath,
+            isAligned: true,
+            isInactive: true,
+            layer: 'layer_1',
+            currentAlignedX: 0,
+            currentAlignedY: 0,
+            currentSize: baseEmojiSize * alignedSizeMultiplier,
+            targetX: 0,
+            targetY: 0,
+            targetSize: baseEmojiSize * alignedSizeMultiplier,
+            targetOpacity: 1.0,
+            originalBaseX: 0,
+            originalBaseY: 0,
+            emojiIndex: -1,
+        });
+    });
+    const order = new Map(allInFolder.map((p, i) => [p, i]));
+    return [...folderPoints, ...extras].sort((a, b) => (order.get(a.imagePath) ?? 1e9) - (order.get(b.imagePath) ?? 1e9));
+}
+
 // Handle emoji click - align all emojis from same folder
 function handleEmojiClick(clickedPoint) {
     // Disable image clicks in mobile version (only category navigation is active)
@@ -3232,62 +3163,15 @@ function handleEmojiClick(clickedPoint) {
     }
     // Only handle alignment if nothing is currently aligned (unaligning is handled by mouseDown)
     // Align all emojis from the same folder
-    let clickedFolderPath = clickedPoint.folderPath;
-    if (!clickedFolderPath) {
-        clickedFolderPath = clickedPoint.imagePath.substring(0, clickedPoint.imagePath.lastIndexOf('/'));
-        // If no '/' found, it's in root - use 'final images' as folder
-        if (clickedFolderPath === clickedPoint.imagePath || clickedFolderPath === '') {
-            clickedFolderPath = 'final images';
-        }
-    }
+    const clickedFolderPath = clickedPoint.folderPath || normalizeFolderPathFromImagePath(clickedPoint.imagePath);
     
     alignedEmojiIndex = clickedPoint.emojiIndex; // Keep for compatibility
-    alignedEmojis = points.filter(p => {
-        let pFolder = p.folderPath;
-        if (!pFolder) {
-            pFolder = p.imagePath.substring(0, p.imagePath.lastIndexOf('/'));
-            // If no '/' found, it's in root - use 'final images' as folder
-            if (pFolder === p.imagePath || pFolder === '') {
-                pFolder = 'final images';
-            }
-        }
+    const folderPoints = points.filter((p) => {
+        const pFolder = p.folderPath || normalizeFolderPathFromImagePath(p.imagePath);
         return pFolder === clickedFolderPath;
     });
-    
-    // Also find all images from the folder that might not be in points yet
-    // (in case we have more images than points)
-    const allImagesFromFolder = imagePaths.filter(path => {
-        let pathFolder = path.substring(0, path.lastIndexOf('/'));
-        if (pathFolder === path || pathFolder === '') {
-            pathFolder = 'final images';
-        }
-        return pathFolder === clickedFolderPath;
-    });
-    
-    // Add any images from folder that aren't in points yet
-    allImagesFromFolder.forEach(path => {
-        const alreadyInPoints = points.some(p => p.imagePath === path);
-        if (!alreadyInPoints) {
-            // Create a temporary point for this image (will be added to alignedEmojis but not points)
-            const tempPoint = {
-                imagePath: path,
-                folderPath: clickedFolderPath,
-                isAligned: true,
-                currentAlignedX: 0,
-                currentAlignedY: 0,
-                currentSize: baseEmojiSize * alignedSizeMultiplier,
-                targetX: 0,
-                targetY: 0,
-                targetSize: baseEmojiSize * alignedSizeMultiplier,
-                targetOpacity: 1.0,
-                originalBaseX: 0,
-                originalBaseY: 0,
-                emojiIndex: -1
-            };
-            alignedEmojis.push(tempPoint);
-        }
-    });
-    
+    alignedEmojis = mergeFolderImagesWithAllPaths(clickedFolderPath, folderPoints);
+
     alignedFolderPath = clickedFolderPath;
     selectionFocusPointForPhase2 = clickedPoint; // Phase 2: pan to clicked image
     
@@ -3554,7 +3438,7 @@ function filterByTag(tag) {
         return;
     }
     
-    // Map tag to search term (handle 'install' -> 'installation')
+    // Map UI tags to folder tag vocabulary
     const searchTag = tag === 'install' ? 'installation' : tag;
     
     // Find all unique folders that match this tag using FOLDER_TAGS mapping
@@ -3840,13 +3724,12 @@ function selectIndexFolder(folderPath, folderName) {
         });
     }
     
-    // Find all images in this folder
-    const folderImages = points.filter(p => {
-        const pFolder = p.folderPath || p.imagePath.substring(0, p.imagePath.lastIndexOf('/'));
+    const folderPointsSel = points.filter((p) => {
+        const pFolder = p.folderPath || normalizeFolderPathFromImagePath(p.imagePath);
         return pFolder === folderPath;
     });
-    
-    if (folderImages.length === 0) {
+    const hasImagesInList = imagePaths.some((path) => normalizeFolderPathFromImagePath(path) === folderPath);
+    if (folderPointsSel.length === 0 && !hasImagesInList) {
         console.warn(`No images found in folder: ${folderPath}`);
         return;
     }
@@ -3858,53 +3741,54 @@ function selectIndexFolder(folderPath, folderName) {
     // This is a modified version of handleEmojiClick that works smoothly from index mode
     // For mobile: snap layout (no animation) to avoid stuck small images
     if (isMobileDevice()) {
-        enterSelectionModeForFolder(folderPath, folderImages, false);
+        enterSelectionModeForFolder(folderPath, folderPointsSel, false);
     } else {
-        enterSelectionModeForFolder(folderPath, folderImages, true);
+        enterSelectionModeForFolder(folderPath, folderPointsSel, true);
     }
 }
 
 // Enter selection mode for a folder (called from index mode)
-function enterSelectionModeForFolder(folderPath, folderImages, animateLayout = true) {
-    // Set up alignment state
-    alignedEmojiIndex = folderImages[0].emojiIndex;
-    alignedEmojis = folderImages;
+function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = true) {
+    const merged = mergeFolderImagesWithAllPaths(folderPath, folderPoints);
+    alignedEmojiIndex =
+        folderPoints[0]?.emojiIndex ??
+        (merged[0]?.emojiIndex >= 1 ? merged[0].emojiIndex : 1);
+    alignedEmojis = merged;
     alignedFolderPath = folderPath;
     
     if (isMobileDevice()) {
         // Mobile: align in a simple vertical column (10% left padding, 60% width), non-interactive
-    folderImages.forEach(p => {
+    folderPoints.forEach(p => {
         p.isAligned = true;
             p.isInactive = true; // non-clickable
         p.targetOpacity = 1.0;
     });
         // Fade out others
     points.forEach(p => {
-        if (!folderImages.includes(p)) {
+        if (!folderPoints.includes(p)) {
             p.targetOpacity = 0.0;
             p.isInactive = true;
         }
     });
-    alignedEmojis = folderImages;
     layoutAlignedEmojisMobileVertical(false); // snap into place
     if (isMobileDevice()) {
         setMobileNavVisibility(false); // keep nav/buttons hidden during selection
     }
     } else {
         // DESKTOP: keep existing behavior
-        folderImages.forEach(p => {
+        folderPoints.forEach(p => {
             p.isAligned = true;
             p.isInactive = true; // keep inactive / unclickable
             p.targetOpacity = 1.0;
         });
         points.forEach(p => {
-            if (!folderImages.includes(p)) {
+            if (!folderPoints.includes(p)) {
                 p.targetOpacity = 0.0;
                 p.isInactive = true;
             }
         });
         selectionFocusPointForPhase2 = null; // From menu: phase 2 will pick center-closest
-        layoutAlignedEmojisDesktop(true);
+        layoutAlignedEmojisDesktop(animateLayout);
     }
     
     // Load and display about.txt
@@ -4088,22 +3972,21 @@ function clearFilter() {
 function handleFilteredImageClick(clickedPoint) {
     if (!isFilterMode || !clickedPoint.isFiltered) return;
     
-    // Get all images from the same folder
-    const folderPath = clickedPoint.filteredFolder || clickedPoint.imagePath.substring(0, clickedPoint.imagePath.lastIndexOf('/'));
-    const folderImages = points.filter(p => {
-        const pFolder = p.imagePath.substring(0, p.imagePath.lastIndexOf('/'));
+    const folderPath = clickedPoint.filteredFolder || normalizeFolderPathFromImagePath(clickedPoint.imagePath);
+    const folderPointsF = points.filter((p) => {
+        const pFolder = p.folderPath || normalizeFolderPathFromImagePath(p.imagePath);
         return pFolder === folderPath;
     });
     
-    if (folderImages.length === 0) return;
+    if (folderPointsF.length === 0 && !imagePaths.some((path) => normalizeFolderPathFromImagePath(path) === folderPath)) return;
     
     // Clear current filter and align folder images
     clearFilter();
     
     // Align folder images (desktop horizontal layout; relayouts as images load)
     selectionFocusPointForPhase2 = clickedPoint; // Phase 2: pan to clicked image
-    alignedEmojiIndex = clickedPoint.imageIndex;
-    alignedEmojis = folderImages;
+    alignedEmojiIndex = clickedPoint.imageIndex ?? folderPointsF[0]?.emojiIndex ?? 1;
+    alignedEmojis = mergeFolderImagesWithAllPaths(folderPath, folderPointsF);
     alignedFolderPath = folderPath;
     layoutAlignedEmojisDesktop(true);
     
@@ -4157,8 +4040,8 @@ function positionFilterButtons() {
     const dashWidth = tempCtx.measureText(dashText).width;
     const totalSpacingWidth = threeSpacesWidth + dashWidth + threeSpacesWidth; // 3 spaces + 8 dashes + 3 spaces
     
-    // Find "stage design" button - it's the first one, at 1/3 from left
-    const stageDesignBtn = Array.from(buttons).find(btn => btn.textContent.trim().toLowerCase() === 'stage design');
+    // Anchor separator to the first content button (data-tag="stage")
+    const stageDesignBtn = Array.from(buttons).find(btn => btn.getAttribute('data-tag') === 'stage');
     const weAreBtn = document.getElementById('weAreButton');
     const backBtn = document.getElementById('backButton');
     
@@ -4202,7 +4085,7 @@ function positionFilterButtons() {
         }
     }
     
-    // Position "stage design" and other buttons starting at 1/3 from left
+    // Position category buttons starting at 1/3 from left
     let currentX = startX;
     
     buttons.forEach((btn) => {
@@ -4215,7 +4098,7 @@ function positionFilterButtons() {
         currentX += textWidth + (spaceWidth * scale); // Button width + one space
     });
     
-    // Position "we are" button to the left of "stage design" with: 3 spaces + 8 dashes + 3 spaces
+    // Position "we are" button to the left of first category button with: 3 spaces + 8 dashes + 3 spaces
     if (stageDesignBtn && weAreBtn) {
         const stageDesignLeft = startX; // Stage design is at 1/3 from left
         const weAreTextWidth = tempCtx.measureText(weAreBtn.textContent).width * scale;
@@ -5643,10 +5526,11 @@ function showMobileCategoryContent(category) {
     // Set category title
     const categoryLabels = {
         'we-are': 'we are',
-        'stage': 'stage design',
-        'install': 'installation',
-        'tech': 'technical solutions',
-        'spatial': 'spatial design'
+        'stage': 'visual research',
+        'install': 'explore',
+        'tech': 'space n sound',
+        'concept': 'make',
+        'spatial': 'perform'
     };
     
     categoryTitle.textContent = categoryLabels[category] || category;
@@ -5669,7 +5553,7 @@ function showMobileCategoryContent(category) {
         }
     } else {
         // Filter images by category
-        const tag = category === 'spatial' ? 'concept' : category;
+        const tag = category;
         filterByTag(tag);
         
         // Show filtered images info
