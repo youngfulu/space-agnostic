@@ -1,0 +1,10 @@
+name: (Addon 26)
+#
+Project type: (Installation / Spatial audio)
+year: (2025)
+Location: Paris, France.
+Client: (Addon 26)
+Agency:(In-house)
+Status: (Finished)
+Contributor: (Ilya Duganov, Alnx, Rustem Imamiev )
+

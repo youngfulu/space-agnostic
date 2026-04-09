@@ -1,0 +1,6 @@
+
+How would acoustic property of space appears if it took on a physical form?
+This research project explores cross-modal perception and the aesthetic potential of transforming sound data into tangible objects.
+High-resolution impulse responses (audible echo of physical space)  was recorded during the renovation of a former power-plant machinery hall were converted into raw data spreadsheets using the MuBu library developed at IRCAM. These numerical datasets were then processed through various methods and software tools to generate multiple visual interpretations of the original sound.
+Final outcome was represented by series of physical objects: series of sculptures, photo-prints, and extended documentation of research method
+Project was commissioned by the VAC Foundation in 2021.

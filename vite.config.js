@@ -5,6 +5,8 @@ import fs from 'fs';
 
 const IMG_SOURCE = path.resolve(process.cwd(), 'Artsy');
 const THUMB_SOURCE = path.resolve(process.cwd(), 'thumb');
+/** GitHub Pages serves /docs on the target branch — build must land there, not repo root. */
+const BUILD_OUT_DIR = 'docs';
 
 export default defineConfig(({ command }) => {
   const isProd = command === 'build';
@@ -54,7 +56,7 @@ export default defineConfig(({ command }) => {
             fs.readFile(filePath, (err, data) => {
               if (err) return next();
               const ext = path.extname(filePath).toLowerCase();
-              const types = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.txt': 'text/plain' };
+              const types = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.svg': 'image/svg+xml', '.txt': 'text/plain' };
               res.setHeader('Content-Type', types[ext] || 'application/octet-stream');
               res.end(data);
             });
@@ -66,7 +68,7 @@ export default defineConfig(({ command }) => {
         name: 'copy-img-to-dist',
         closeBundle() {
           try {
-            const outDir = path.resolve(process.cwd(), 'dist');
+            const outDir = path.resolve(process.cwd(), BUILD_OUT_DIR);
             const imgDest = path.join(outDir, 'img');
             // Keep original names (including #) so URL-encoded paths match: browser requests
             // .../thumb/2gis%20%20%23spatial/... → server decodes to "2gis  #spatial" → matches folder
@@ -92,7 +94,8 @@ export default defineConfig(({ command }) => {
     root: '.',
     publicDir: 'public',
     build: {
-      outDir: 'dist',
+      outDir: BUILD_OUT_DIR,
+      emptyOutDir: true,
       assetsDir: 'assets',
     },
   };
