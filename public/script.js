@@ -985,7 +985,10 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
 // Filter state
 let currentFilterTag = null; // null = no filter, otherwise the tag to filter by
 let filteredImages = []; // Array of filtered image points
-let isFilterMode = false; // Whether we're in filter mode
+let isFilterMode = false; // Whether we're in filter mode (legacy / mobile index mode)
+// Desktop toggle filter — set of currently active tag strings (up to 5)
+let activeTags = new Set();
+const ALL_FILTER_TAGS = ['stage', 'install', 'tech', 'concept', 'spatial'];
 let isWeAreMode = false; // Whether we're in "We are" mode
 
 // Index mode state (hashtag-based folder navigation)
@@ -996,11 +999,11 @@ let indexModeTag = null; // Current hashtag being filtered
 
 // Hashtag to category mapping
 const HASHTAG_MAP = {
-    'stage': '#see',
+    'stage': '#vis',
     'install': '#exp',
-    'concept': '#make',
-    'tech': '#sound',
-    'spatial': '#perf'
+    'concept': '#mat',
+    'tech': '#snd',
+    'spatial': '#pf'
 };
 
 // Folder name to tags mapping (since imagePaths don't include hashtags)
@@ -1039,11 +1042,11 @@ const FOLDER_TAGS = {
 function deriveTagsFromFolderName(folderNameRaw) {
     const name = (folderNameRaw || '').toLowerCase();
     const tags = [];
-    if (name.includes('#stage') || name.includes('#see')) tags.push('stage');
+    if (name.includes('#stage') || name.includes('#see') || name.includes('#vis')) tags.push('stage');
     if (name.includes('#installation') || name.includes('#instalation') || name.includes('#instal') || name.includes('#exp')) tags.push('installation');
-    if (name.includes('#concept') || name.includes('#make')) tags.push('concept');
-    if (name.includes('#tech') || name.includes('#sound')) tags.push('tech');
-    if (name.includes('#spatial') || name.includes('#perf')) tags.push('spatial');
+    if (name.includes('#concept') || name.includes('#make') || name.includes('#mat')) tags.push('concept');
+    if (name.includes('#tech') || name.includes('#sound') || name.includes('#snd')) tags.push('tech');
+    if (name.includes('#spatial') || name.includes('#perf') || name.includes('#pf')) tags.push('spatial');
     return tags;
 }
 
@@ -1118,96 +1121,95 @@ function getTouchMidpoint(t1, t2) {
 
 // Image list — paths relative to Artsy/ (see scripts/generate-image-list.js)
 const imagePaths = [
-    'Acousmonium /Screenshot 2024-07-27 at 15.43.45.png',
-    'Acousmonium /pasted-image.jpg',
-    'Acousmonium /pasted-image.png',
-    'Acousmonium /photo_2562@19-07-2021_12-45-07.jpg',
-    'Addon 26 #instal/IMG_3654.png',
-    'Addon 26 #instal/IMG_3659.png',
-    'Addon 26 #instal/Screenshot 2026-01-03 at 15.53.45.png',
-    'Addon 26 #instal/Screenshot 2026-01-03 at 15.54.20.png',
-    'Addon 26 #instal/TDMovieOut.0.png',
-    'Addon 26 #instal/TDMovieOut.10.png',
-    'Addon 26 #instal/TDMovieOut.2.png',
-    'Addon 26 #instal/addon26.png',
-    'Addon 26 #instal/ind_Screenshot 2026-01-03 at 15.53.30.png',
-    'Addon 26 #instal/ind_addon pc.png',
-    'Addon 26 #instal/photo_2021-04-06_03-24-48.jpg',
-    'Addon 26 #instal/poster.jpg',
-    'Beggar/Screenshot 2023-07-18 at 17.48.01.png',
-    'Beggar/beggar.gif',
-    'Beggar/haram1.png',
-    'Beggar/scratches.gif',
-    'Beggar/test_full.gif',
-    'Broken Karaoke/bkk.jpg',
-    'Broken Karaoke/bkk2.jpg',
-    'Broken Karaoke/photo_2024-05-23_11-55-31.jpg',
-    'Broken Karaoke/photo_2024-07-02_01-50-58.jpg',
-    'Broken Karaoke/photo_2024-07-31_22-06-45.jpg',
-    'Broken Karaoke/photo_2024-08-13_16-43-04.jpg',
-    'CCC/Instagram story - 1@2x.png',
-    'CCC/Screenshot 2025-12-13 at 16.26.19.png',
-    'CCC/Screenshot 2025-12-13 at 16.26.46.png',
-    'CCC/Screenshot 2025-12-13 at 16.50.34.png',
-    'CCC/awarness.png',
-    'CCC/photo_2024-07-12_06-09-30.jpg',
-    'Chertochki /Screenshot 2025-03-13 at 23.22.55.png',
-    'Chertochki /Screenshot 2025-03-14 at 01.46.33.png',
-    'Chertochki /chertochki .jpg',
-    'Chertochki /photo_2024-05-02_01-23-25.jpg',
-    'Chertochki /photo_2024-05-11_21-43-51.jpg',
-    'Chertochki /photo_2024-05-20_21-16-49.jpg',
-    'Chertochki /photo_2025-03-19_21-49-03.jpg',
-    'Cicada simulation /cicada-nine — slide 02.png',
-    'Cicada simulation /cicada-nine — slide 05.png',
-    'Cicada simulation /cicada-nine — slide 06.png',
-    'Cicada simulation /cicada-nine — slide 07.png',
-    'Cicada simulation /cicada-nine — slide 09.png',
-    'Cicada simulation /cicada-nine — slide 14.png',
-    'Cicada simulation /png-transparent-cicada.png',
-    'Circular Repetition   #instal/CR.png',
-    'Circular Repetition   #instal/ComfyUI_00006_bw.png',
-    'Circular Repetition   #instal/Screenshot 2026-03-06 at 13.46.40.png',
-    'Circular Repetition   #instal/la bienalle.png',
-    'Definition /Screenshot 2023-07-18 at 17.56.35.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.17.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.25.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.35.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.42.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.57.png',
-    'Definition /Screenshot 2026-04-07 at 18.53.45.png',
-    'Empreian Tiflis/Screen Shot 2018-10-25 at 15.09.43.png',
-    'Empreian Tiflis/Screen Shot 2018-10-25 at 15.12.25.png',
-    'Empreian Tiflis/tiflis.webp',
-    'Ergamo/120fps_final_00004.png',
-    'Ergamo/16fps_00006.png',
-    'Ergamo/16fps_00011.png',
-    'Ergamo/16fps_00020.png',
-    'Ergamo/30fps_final_00001.png',
-    'Ergamo/AnimateDiff_00004.png',
-    'Flora/Screenshot 2026-04-07 at 17.17.55.png',
-    'Flora/photo_2021-07-25_01-23-59.jpg',
-    'Ghosted/Ghosted.gif',
-    'Ghosted/IG walk .gif',
-    'Ghosted/IG walk _poster.jpg',
-    'Ghosted/ig-club.gif',
-    'Ghosted/ig-club_poster.jpg',
-    'Marche Nocturn /IMG_0457.jpg',
-    'Marche Nocturn /IMG_0458.jpg',
+    'Acousmonium #snd #pf/Screenshot 2024-07-27 at 15.43.45.png',
+    'Acousmonium #snd #pf/pasted-image.jpg',
+    'Acousmonium #snd #pf/pasted-image.png',
+    'Acousmonium #snd #pf/photo_2562@19-07-2021_12-45-07.jpg',
+    'Addon 26 #snd/IMG_3654.png',
+    'Addon 26 #snd/IMG_3659.png',
+    'Addon 26 #snd/Screenshot 2026-01-03 at 15.53.45.png',
+    'Addon 26 #snd/Screenshot 2026-01-03 at 15.54.20.png',
+    'Addon 26 #snd/TDMovieOut.0.png',
+    'Addon 26 #snd/TDMovieOut.10.png',
+    'Addon 26 #snd/TDMovieOut.2.png',
+    'Addon 26 #snd/addon26.png',
+    'Addon 26 #snd/ind_Screenshot 2026-01-03 at 15.53.30.png',
+    'Addon 26 #snd/ind_addon pc.png',
+    'Addon 26 #snd/photo_2021-04-06_03-24-48.jpg',
+    'Addon 26 #snd/poster.jpg',
+    'Beggar #pf/Screenshot 2023-07-18 at 17.48.01.png',
+    'Beggar #pf/photo_2021-02-10_20-56-48.jpg',
+    'Broken Karaoke #snd #pf/bc_artist.jpg',
+    'Broken Karaoke #snd #pf/bc_cover.jpg',
+    'Broken Karaoke #snd #pf/bkk.jpg',
+    'Broken Karaoke #snd #pf/bkk2.jpg',
+    'Broken Karaoke #snd #pf/photo_2024-05-23_11-55-31.jpg',
+    'Broken Karaoke #snd #pf/photo_2024-07-02_01-50-58.jpg',
+    'Broken Karaoke #snd #pf/photo_2024-07-31_22-06-45.jpg',
+    'Broken Karaoke #snd #pf/photo_2024-08-13_16-43-04.jpg',
+    'CCC /Instagram story - 1@2x.png',
+    'CCC /Screenshot 2025-12-13 at 16.26.19.png',
+    'CCC /Screenshot 2025-12-13 at 16.26.46.png',
+    'CCC /Screenshot 2025-12-13 at 16.50.34.png',
+    'CCC /awarness.png',
+    'CCC /photo_2024-07-12_06-09-30.jpg',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 02.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 03.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 04.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 05.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 06.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 07.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 08.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 09.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 12.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 14.png',
+    'Circular Repetition   #snd #vis/CR.png',
+    'Circular Repetition   #snd #vis/ComfyUI_00006_bw.png',
+    'Circular Repetition   #snd #vis/Screenshot 2026-03-06 at 13.46.40.png',
+    'Circular Repetition   #snd #vis/la bienalle.png',
+    'Definition #vis #pf/Screenshot 2023-07-18 at 17.56.35.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.17.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.25.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.35.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.42.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.57.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 18.53.45.png',
+    'Dude/Screenshot 2022-02-16 at 13.16.32.png',
+    'Dude/Screenshot 2024-06-04 at 12.34.38.png',
+    'Dude/photo_2021-01-06_18-39-57.jpg',
+    'Dude/photo_2021-01-27_13-56-31.jpg',
+    'Dude/photo_2021-01-27_13-56-34.jpg',
+    'Dude/photo_2022-01-18_15-28-07.jpg',
+    'Empreian Tiflis #snd #pf/Screen Shot 2018-10-25 at 15.09.43.png',
+    'Empreian Tiflis #snd #pf/Screen Shot 2018-10-25 at 15.12.25.png',
+    'Empreian Tiflis #snd #pf/tiflis.webp',
+    'Ergamo #vis/120fps_final_00004.png',
+    'Ergamo #vis/16fps_00006.png',
+    'Ergamo #vis/16fps_00011.png',
+    'Ergamo #vis/16fps_00020.png',
+    'Ergamo #vis/AnimateDiff_00004.png',
+    'Flora   #snd #pf #vis/Screenshot 2026-04-07 at 17.17.55.png',
+    'Flora   #snd #pf #vis/photo_2021-07-25_01-23-59.jpg',
+    'Ghosted  #snd #pf #vis/ComfyUI_temp_ehlyb_00002_.png',
+    'Ghosted  #snd #pf #vis/Ghosted.gif',
+    'Ghosted  #snd #pf #vis/IG walk .gif',
+    'Kwame the composer/Screenshot 2025-03-13 at 23.22.55.png',
+    'Kwame the composer/Screenshot 2025-03-14 at 01.46.33.png',
+    'Kwame the composer/chertochki .jpg',
+    'Kwame the composer/photo_2024-05-02_01-23-25.jpg',
+    'Kwame the composer/photo_2024-05-11_21-43-51.jpg',
+    'Kwame the composer/photo_2024-05-20_21-16-49.jpg',
+    'Kwame the composer/photo_2025-03-19_21-49-03.jpg',
+    'Kwame the composer/photo_2025-03-20_17-25-43.png',
     'Marche Nocturn /Screenshot 2023-07-11 at 23.48.52.png',
     'Marche Nocturn /Screenshot 2023-07-12 at 00.26.54.png',
     'Marche Nocturn /Screenshot 2023-07-18 at 17.05.47.png',
     'Marche Nocturn /Screenshot 2025-03-10 at 16.54.40.png',
     'Marche Nocturn /Screenshot 2025-03-10 at 16.54.51.png',
     'Marche Nocturn /mach nocturne .001.png',
-    'Middle east/IMG_8410_10mb.gif',
-    'Middle east/IMG_8433_10mb.gif',
-    'Middle east/IMG_8434_10mb.gif',
-    'Middle east/IMG_8576_10mb.gif',
-    'Middle east/IMG_8708_10mb.gif',
-    'Middle east/IMG_8720_10mb.gif',
     'Nat.sim /ComfyUI_00062_.png',
     'Nat.sim /IMG_4385.jpeg',
+    'Nat.sim /Screenshot 2025-04-13 at 20.39.59.png',
     'Nat.sim /Spat5Move.gif',
     'Nat.sim /nat.sim.gif',
     'Nat.sim /photo_2025-04-13_20-02-40.jpg',
@@ -1215,22 +1217,35 @@ const imagePaths = [
     'Psyche/IMG_A3BD3A5D911A-1.jpeg',
     'Psyche/Screenshot 2024-07-27 at 15.56.50.png',
     'Psyche/pasted-image.png',
-    'Screenshot 2023-07-11 at 23.47.11_result.png',
+    'Seen/LTX-2_00005_.gif',
+    'Seen/LTX-2_00015_.gif',
+    'Seen/Screenshot 2026-02-03 at 16.28.31.png',
+    'Seen/TDMovieOut.1.png',
+    'Seen/fin front.png',
     'Shapes/photo_2022-09-09_18-36-57.jpg',
+    'Shapes/photo_2022-09-10_11-32-25.jpg',
     'Shapes/photo_2022-09-10_11-32-26.jpg',
     'Shapes/photo_2022-09-11_20-12-15.jpg',
     'Shapes/photo_2022-09-11_20-12-19.jpg',
     'Shapes/photo_2022-09-11_21-38-30.jpg',
     'Shapes/photo_2022-09-11_21-38-31.jpg',
     'Shapes/photo_2022-09-11_22-07-05.jpg',
+    'Slope/ComfyUI_00199_street.png',
+    'Slope/sl1.png',
+    'Slope/sl2.png',
+    'Slope/sl3.png',
+    'Slope/sl4.png',
+    'Slope/sl5.png',
     'Spectral shapes/IMG_9007.jpeg',
-    'Spectral shapes/IMG_9142.jpeg',
-    'Spectral shapes/Screenshot 2021-12-01 at 22.03.57.png',
     'Spectral shapes/Screenshot 2023-07-27 at 11.40.10.png',
     'Spectral shapes/click4.png',
+    'Spectral shapes/cut1.jpg',
     'Spectral shapes/hi_size.png',
     'Spectral shapes/long_one.png',
-    'Spectral shapes/warped IRs.png',
+    'Spectral shapes/photo_2026-05-06_19-03-39.jpg',
+    'Spectral shapes/photo_2026-05-07_14-40-44.jpg',
+    'Spectral shapes/plot2.png',
+    'Spectral shapes/plot_mini.png',
     'Spectral veawings/B/Screenshot 2023-06-11 at 21.41.40_result.jpg',
     'Spectral veawings/B/Screenshot 2023-06-12 at 01.42.41_result.jpg',
     'Spectral veawings/B/Screenshot 2023-06-12 at 02.30.07_result.jpg',
@@ -1239,6 +1254,7 @@ const imagePaths = [
     'Spectral veawings/B/Screenshot 2023-07-25 at 23.14.46_result.jpg',
     'Spectral veawings/B/Screenshot 2023-08-12 at 16.34.24_result.jpg',
     'Spectral veawings/B/Screenshot 2023-08-21 at 01.08.40_result.jpg',
+    'Spectral veawings/B/Screenshot 2023-12-09 at 05.19.10.png',
     'Spectral veawings/carpet16_result.jpg',
     'Spectral veawings/carpet17_result.jpg',
     'Spectral veawings/carpet22_result.jpg',
@@ -1249,14 +1265,17 @@ const imagePaths = [
     'Spectral veawings/carpet28_result.jpg',
     'Spectral veawings/carpet29.jpg',
     'Spectral veawings/carpet29_result.jpg',
+    'Thresholds/ScreenRecording_04-09-2026 13-16-47_1.gif',
     'Thresholds/Screenshot 2024-11-24 at 22.18.45.png',
     'Thresholds/Screenshot 2024-11-24 at 22.21.12.png',
     'Thresholds/liminal8.png',
     'Thresholds/pasted-image.png',
+    'Thresholds/performe_th.png',
     'Thresholds/textured_3_1kMhVqro.jpg',
     'Thresholds/textured_4_1kMhVqro.jpg',
     'Thresholds/textured_5_1kMhVqro.jpg',
     'Thresholds/textured_9_1kMhVqro.jpg',
+    'Your eyes /camvideo_33020e20.gif',
     'Your eyes /photo_2019-07-25_15-19-42.jpg',
     'Your eyes /photo_2019-07-25_15-40-52.jpg',
     'Zatmenie 1/Screen Shot 2019-01-07 at 00.25.33.png',
@@ -1269,56 +1288,58 @@ const imagePaths = [
     'Zatmenie 2/pasted-image-2.jpg',
     'Zatmenie 2/pasted-image-filtered.jpeg',
     'Zatmenie 2/pasted-image.jpg',
-    'cultural issues/IMG_8774.jpg',
-    'cultural issues/IMG_8775.jpg',
-    'cultural issues/c1.jpg',
-    'cultural issues/c2.jpg',
-    'cultural issues/c3.jpg',
-    'ex_m6/IMG_1365.jpeg',
-    'ex_m6/IMG_1388.jpeg',
-    'ex_m6/Screenshot 2024-02-27 at 23.59.20.png',
-    'ex_m6/exm_book comp — slide 01.jpg',
-    'ex_m6/exm_book comp — slide 02.jpg',
-    'ex_m6/exm_book comp — slide 04.jpg',
-    'ex_m6/exm_book comp — slide 52.jpg',
-    'ex_m6/exm_book comp — slide 53.jpg',
-    'ex_m6/exm_book comp — slide 54.jpg',
-    'ex_m6/exm_book_comp_part1.gif',
-    'ex_m6/exm_book_comp_part2.gif',
-    'ex_m6/pasted-image-3.png',
-    'ex_m6/photo_2024-03-03_21-39-45.jpg',
-    'extractive memories/2023-08-28--20-20-00.gif',
-    'extractive memories/2023-08-28--20-20-00_poster.jpg',
-    'extractive memories/2023-11-19--13-29-55.gif',
-    'extractive memories/2023-11-19--13-29-55_poster.jpg',
-    'extractive memories/2023-11-27--19-13-04_poster.jpg',
-    'extractive memories/2023-11-27--20-11-28.gif',
-    'extractive memories/2023-11-27--20-11-28_poster.jpg',
-    'extractive memories/2023-11-29--01-01-18.gif',
-    'extractive memories/2023-11-29--01-01-18_poster.jpg',
-    'extractive memories/2023-12-06--16-57-24_poster.jpg',
-    'extractive memories/2023-12-06--16-58-42-2_poster.jpg',
-    'extractive memories/2023-12-06--18-07-53.gif',
-    'extractive memories/2023-12-06--18-07-53_poster.jpg',
-    'extractive memories/2023-12-06--18-55-00_poster.jpg',
-    'extractive memories/Screenshot 2024-10-13 at 03.18.05.png',
-    'extractive memories/exm_ — slide 01.jpg',
-    'extractive memories/exm_ — slide 02.jpg',
-    'extractive memories/exm_ — slide 05.jpg',
-    'extractive memories/exm_ — slide 06.jpg',
-    'extractive memories/nobodyfeelingtears__poster.jpg',
-    'iced/gula vis.jpg',
-    'iced/iced.jpg',
-    'iced/iced3.jpg',
-    'iced/iced5.jpg',
-    'sculpture/Screenshot 2022-02-16 at 13.16.32.png',
-    'waevaev/a2471434847_1x1_700.jpg',
-    'waevaev/a3791641340_1x1_700.jpg',
-    'waevaev/a4276255458_1x1_700.jpg',
+    'cultural issues #exp #snd/bc_artist.jpg',
+    'cultural issues #exp #snd/bc_last_ceremonial.jpg',
+    'cultural issues #exp #snd/bc_s2.jpg',
+    'cultural issues #exp #snd/bc_sand_blues.jpg',
+    'cultural issues #exp #snd/c1.jpg',
+    'cultural issues #exp #snd/c2.jpg',
+    'cultural issues #exp #snd/c3.jpg',
+    'ex_m6  #snd #pf #vis/A/20240314_180920_resized.jpg',
+    'ex_m6  #snd #pf #vis/A/Photo027.jpg',
+    'ex_m6  #snd #pf #vis/IMG_1365.jpeg',
+    'ex_m6  #snd #pf #vis/IMG_1388.jpeg',
+    'ex_m6  #snd #pf #vis/Screenshot 2024-02-27 at 23.59.20.png',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 01.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 02.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 03.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 04.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 52.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 53.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 54.jpg',
+    'ex_m6  #snd #pf #vis/exm_book_comp_part1.gif',
+    'ex_m6  #snd #pf #vis/exm_book_comp_part2.gif',
+    'ex_m6  #snd #pf #vis/pasted-image-3.png',
+    'ex_m6  #snd #pf #vis/photo_2024-03-03_21-39-45.jpg',
+    'extractive memories   #snd #pf #vis/2023-11-19--13-29-55.gif',
+    'extractive memories   #snd #pf #vis/2023-11-27--19-13-04.gif',
+    'extractive memories   #snd #pf #vis/2023-11-27--20-11-28.gif',
+    'extractive memories   #snd #pf #vis/2023-11-29--01-01-18.gif',
+    'extractive memories   #snd #pf #vis/2023-12-06--16-57-24.gif',
+    'extractive memories   #snd #pf #vis/2023-12-06--16-58-42-2.gif',
+    'extractive memories   #snd #pf #vis/2023-12-06--18-07-53.gif',
+    'extractive memories   #snd #pf #vis/2023-12-06--18-55-00.gif',
+    'extractive memories   #snd #pf #vis/Screenshot 2024-10-13 at 03.18.05.png',
+    'extractive memories   #snd #pf #vis/exm_ — slide 01.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 02.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 03.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 04.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 05.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 06.jpg',
+    'extractive memories   #snd #pf #vis/nobodyfeelingtears_.gif',
+    'iced   #vis/gula vis.jpg',
+    'iced   #vis/iced.jpg',
+    'iced   #vis/iced3.jpg',
+    'iced   #vis/iced5.jpg',
+    'waevaev/bc_a.jpg',
+    'waevaev/bc_artist.jpg',
+    'waevaev/bc_tilde.jpg',
+    'waevaev/bc_v_v.jpg',
     'walker/5.jpg',
     'walker/6.1.jpg',
     'walker/prev-1.jpg',
-    'walker/prev-2.png'
+    'walker/prev-2.png',
+    'walker/walker_master.gif'
 ];
 
 // Image cache: thumb = grid (small), img = full-res (selection mode). Draw uses img || thumb.
@@ -1354,37 +1375,40 @@ function initLoadingText() {
     allWordsVisible = false;
     debugLog('Initializing loading text:', text, { totalWords, filteredWords, words });
     
-    // Clear and prepare container
     loadingTextEl.innerHTML = '';
-    
-    // Create word elements - КАЖДОЕ слово отдельно, ВКЛЮЧАЯ "Spatial"
+
+    // CSS animation-delay per word — no JS timer jitter
+    const WORD_STEP_MS = 600;  // gap between each word starting
+    const FADE_MS      = 700;  // must match CSS animation duration
     filteredWords.forEach((word, index) => {
         const wordSpan = document.createElement('span');
         wordSpan.className = 'word';
         wordSpan.textContent = word;
-        // НЕ устанавливаем inline opacity - используем только CSS
+        wordSpan.style.animationDelay = (index * WORD_STEP_MS) + 'ms';
         loadingTextEl.appendChild(wordSpan);
-        
-        debugLog(`Created word ${index + 1}/${totalWords}: "${word}"`);
-        
-        // Animate word appearance with 0.6s delay per word
-        setTimeout(() => {
-            // Добавляем класс visible - CSS transition сработает
-            wordSpan.classList.add('visible');
-            visibleWordsCount++;
-            debugLog(`Word ${index + 1}/${totalWords} "${word}" visible (${visibleWordsCount}/${totalWords})`);
-            
-            // Check if all words are now visible
-            if (visibleWordsCount >= totalWords) {
-                // Даем время для CSS transition (0.6s)
-                setTimeout(() => {
-                    allWordsVisible = true;
-                    debugLog('All words are now visible!', { totalWords, visibleWordsCount, allWords: filteredWords });
-                    checkIfReadyToShowImages();
-                }, 650); // Немного больше чем transition duration
-            }
-        }, index * 600); // 0.6 seconds per word
     });
+
+    // Stagger choice buttons — mirror exactly the words pattern:
+    // set animationDelay inline per element FIRST, then add the .animating class that applies the animation.
+    if (!isMobileDevice()) {
+        const choiceBtns = document.getElementById('loadingChoiceButtons');
+        if (choiceBtns) {
+            const elements = Array.from(choiceBtns.querySelectorAll('.loading-choice-btn, .loading-choice-sep'));
+            const lastWordEndMs = (totalWords - 1) * WORD_STEP_MS + FADE_MS;
+            elements.forEach((el, i) => {
+                el.style.animationDelay = (lastWordEndMs + i * 500) + 'ms';
+            });
+            // Add class after delays are set — animation starts with each element's inline delay
+            choiceBtns.classList.add('animating');
+        }
+    }
+
+    // Fire ready-check right after last word finishes fading in
+    const totalAnimMs = (totalWords - 1) * WORD_STEP_MS + FADE_MS + 80;
+    setTimeout(() => {
+        allWordsVisible = true;
+        checkIfReadyToShowImages();
+    }, totalAnimMs);
     
     // Safety: ensure words become "visible" after a timeout to avoid blocking the grid
     setTimeout(() => {
@@ -1433,11 +1457,7 @@ function checkIfReadyToShowImages() {
         if (allImagesLoadedTime === null) {
             allImagesLoadedTime = performance.now();
         }
-        hideLoadingIndicator();
-        // Set initial load time for mobile click prevention
-        if (isMobileDevice()) {
-            mobileInitialLoadTime = performance.now();
-        }
+        showLoadingChoiceScreen();
     }
 }
 
@@ -1480,29 +1500,76 @@ function precomputeConnectionTrajectories() {
     console.log(`Pre-computed connection trajectories for ${precomputedConnectionTrajectories.size} folders`);
 }
 
-// Hide loading indicator and show canvas
-let loadingComplete = false;
-function hideLoadingIndicator() {
+// ——— Loading choice screen (explore / index) ———
+
+let loadingComplete = false; // choice screen shown
+let exploreEntered = false;  // user chose explore
+
+// Step 1: loading done → show explore/index choice
+function showLoadingChoiceScreen() {
     if (loadingComplete) return;
     loadingComplete = true;
-    
-    // Pre-compute connection trajectories during loading screen
     precomputeConnectionTrajectories();
-    
+
+    // Fade out progress bar
+    const bar = document.getElementById('loadingProgressBar');
+    if (bar) {
+        bar.style.transition = 'opacity 0.35s ease-out';
+        bar.style.opacity = '0';
+        setTimeout(() => { if (bar.parentNode) bar.style.display = 'none'; }, 400);
+    }
+
+    // On mobile: skip choice, go straight to explore (mobile nav shows automatically)
+    if (isMobileDevice()) {
+        prefetchProjectMeta(); // needed for category year-by-year lists
+        enterExploreMode();
+        return;
+    }
+
+    // Enable clicks now that images are ready (animation was already started in initLoadingText)
+    const btns = document.getElementById('loadingChoiceButtons');
+    if (btns) btns.classList.add('clickable');
+
+    // Prefetch project metadata in background so index is ready
+    prefetchProjectMeta();
+}
+
+// Step 2a: user chose explore — dismiss overlay, reveal canvas
+function enterExploreMode() {
     const loadingIndicator = document.getElementById('loadingIndicator');
-    if (loadingIndicator) {
+    if (loadingIndicator && !loadingIndicator.classList.contains('hidden')) {
         loadingIndicator.classList.add('hidden');
         setTimeout(() => {
-            if (loadingIndicator.parentNode) {
-                loadingIndicator.parentNode.removeChild(loadingIndicator);
-            }
+            if (loadingIndicator.parentNode) loadingIndicator.parentNode.removeChild(loadingIndicator);
         }, 1000);
     }
-    
-    if (canvas) {
-        canvas.classList.add('images-loaded');
+    // Only hide project index instantly when NOT coming from the animated indexBackBtn path
+    // (animated path calls _closeProjectIndexAnimated before enterExploreMode)
+    const projectIndexEl = document.getElementById('projectIndex');
+    const wasProjectIndex = projectIndexEl && projectIndexEl.classList.contains('visible');
+    if (!wasProjectIndex) hideProjectIndex();
+    // Restore filter buttons if they were hidden (e.g. after filter/connection/selection)
+    if (!isMobileDevice() && !wasProjectIndex) {
+        document.querySelectorAll('.filter-button:not(#weAreButton)').forEach(btn => {
+            btn.style.opacity = ''; // clear inline so CSS :hover can work
+            btn.style.transition = '';
+        });
+    }
+    // exploreIndexBtn: show only in clean explore (no filter, no selection, no about)
+    const exploreIndexBtn = document.getElementById('exploreIndexBtn');
+    if (exploreIndexBtn) {
+        const cleanExplore = !isFilterMode && !isWeAreMode && alignedEmojiIndex === null && !isConnectionMode && !isIndexMode;
+        exploreIndexBtn.style.display = (isMobileDevice() || !cleanExplore) ? 'none' : '';
+    }
+    if (canvas) canvas.classList.add('images-loaded');
+    if (!exploreEntered) {
+        exploreEntered = true;
+        if (isMobileDevice()) mobileInitialLoadTime = performance.now();
     }
 }
+
+// Legacy alias (called from safety timeout)
+function hideLoadingIndicator() { enterExploreMode(); }
 
 // Load all images with better error handling
 function loadImages() {
@@ -2030,7 +2097,7 @@ function handleMouseMove(e) {
             hoveredPoint = null;
             hoverStartTime = 0;
             // Restore opacity if not in any special mode
-            if (alignedEmojiIndex === null && !isFilterMode && !isConnectionMode) {
+            if (alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode) {
                 points.forEach(p => {
                     p.targetOpacity = 1.0;
                     p.isHovered = false;
@@ -2040,7 +2107,7 @@ function handleMouseMove(e) {
         }
         return;
     }
-    
+
     // Mouse is over canvas
     mouseOverCanvas = true;
     
@@ -2359,7 +2426,7 @@ function handleMouseLeave() {
             exitConnectionMode();
         }
         // Restore opacity if not in any special mode
-        if (alignedEmojiIndex === null && !isFilterMode && !isConnectionMode) {
+        if (alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode) {
             points.forEach(p => {
                 p.targetOpacity = 1.0;
                 p.isHovered = false;
@@ -2445,6 +2512,15 @@ function handleMouseDown(e) {
         }
         // If clicking on an aligned image or empty space, allow drag navigation
         if ((clickedPoint && clickedPoint.isAligned) || !clickedPoint) {
+            if (clickedPoint && clickedPoint.isAligned && _isBandcampImage(clickedPoint.imagePath)) {
+                const folder = clickedPoint.folderPath || normalizeFolderPathFromImagePath(clickedPoint.imagePath);
+                _bcClickStartX = mouseX;
+                _bcClickStartY = mouseY;
+                _bcClickFolder = folder;
+            } else {
+                _bcClickStartX = null;
+                _bcClickFolder = null;
+            }
             carouselAutoScrollPaused = true; // Pause carousel on click
             isDragging = true;
             lastDragX = mouseX;
@@ -2511,8 +2587,52 @@ function handleMouseDown(e) {
     }
 }
 
+// Bandcamp click tracking (Option A: bc_ images open external URL on clean click)
+let _bcClickStartX = null, _bcClickStartY = null, _bcClickFolder = null;
+
+function _isBandcampImage(imagePath) {
+    return (imagePath || '').split('/').pop().startsWith('bc_');
+}
+function _getBandcampUrl(folderPath) {
+    return (window.__BC_URLS__ && window.__BC_URLS__[folderPath]) || null;
+}
+
+// Preload bandcamp.txt for all folders that contain bc_ images, so URLs are
+// ready before the user opens any folder (avoids async race on first click).
+function _preloadBandcampUrls() {
+    const bcFolders = new Set();
+    (imagePaths || []).forEach(p => {
+        const fname = p.split('/').pop();
+        if (fname && fname.startsWith('bc_')) {
+            const folder = p.substring(0, p.lastIndexOf('/'));
+            if (folder) bcFolders.add(folder);
+        }
+    });
+    const origin = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    if (!window.__BC_URLS__) window.__BC_URLS__ = {};
+    bcFolders.forEach(folder => {
+        const encodedPath = folder.split('/').map(s => encodeURIComponent(s)).join('/');
+        const url = origin + pathPrefix + '/img/' + encodedPath + '/bandcamp.txt';
+        fetch(url).then(r => r.ok ? r.text() : null).catch(() => null).then(text => {
+            if (text && text.trim()) window.__BC_URLS__[folder] = text.trim();
+        });
+    });
+}
+
 // Mouse up handler (end drag)
-function handleMouseUp() {
+function handleMouseUp(e) {
+    if (_bcClickStartX !== null && e) {
+        const rect = canvas.getBoundingClientRect();
+        const dx = (e.clientX - rect.left) - _bcClickStartX;
+        const dy = (e.clientY - rect.top) - _bcClickStartY;
+        if (Math.sqrt(dx * dx + dy * dy) < 8) {
+            const url = _getBandcampUrl(_bcClickFolder);
+            if (url) window.open(url, '_blank', 'noopener');
+        }
+        _bcClickStartX = null;
+        _bcClickFolder = null;
+    }
     if (isDragging) {
         carouselAutoScrollPaused = false; // Resume carousel when user releases
     }
@@ -2879,23 +2999,27 @@ function unalignEmojis() {
     smoothMouseX = targetMouseX;
     smoothMouseY = targetMouseY;
     
-    // Restore images opacity and reset inactive flag for all points
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-        p.isInactive = false; // Reset inactive flag
-    });
-    
+    // Restore images opacity — respect active tag filters
+    if (activeTags.size > 0) {
+        applyTagFilters();
+    } else {
+        points.forEach(p => {
+            p.targetOpacity = 1.0;
+            p.isInactive = false;
+        });
+    }
+
     // Set zoom target to default (will be animated by phase -1)
     currentZoomIndex = initialZoomIndex;
     
-    // Reset opacity for all images
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-    });
-    
     // Update back button visibility
     updateBackButtonVisibility();
-    
+    // Restore exploreIndexBtn on unalign (back to clean grid)
+    if (!isMobileDevice()) {
+        const eib = document.getElementById('exploreIndexBtn');
+        if (eib) eib.style.display = '';
+    }
+
     // Hide prev/next buttons with 0.1s fade-out
     hideSelectionNavButtons();
 }
@@ -3090,12 +3214,16 @@ function exitConnectionMode() {
     mobileLastTappedPoint = null; // Reset mobile tap tracking
     autoHoverTriggerPoint = null; // Clear auto-hover trigger point
     
-    // Restore opacity for all images and reset inactive flag
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-        p.isInactive = false; // Reset inactive flag
-    });
-    
+    // Restore opacity — respect active tag filters
+    if (activeTags.size > 0) {
+        applyTagFilters();
+    } else {
+        points.forEach(p => {
+            p.targetOpacity = 1.0;
+            p.isInactive = false;
+        });
+    }
+
     updateBackButtonVisibility();
 }
 
@@ -3146,6 +3274,7 @@ function handleEmojiClick(clickedPoint) {
     if (isMobileVersion) {
         return;
     }
+    if (typeof window._hideExploreIndexBtn === 'function') window._hideExploreIndexBtn();
     
     // Block if selection mode is not available (images not loaded or cooldown active)
     if (!isSelectionModeAvailable()) {
@@ -3413,7 +3542,42 @@ function clearHoverState() {
 }
 
 // Filter functions - now implements index mode with folder list
+// Apply desktop toggle filter — dim images that don't match any active tag
+function applyTagFilters() {
+    if (activeTags.size === 0) {
+        points.forEach(p => { p.targetOpacity = 1.0; p.isInactive = false; });
+        return;
+    }
+    points.forEach(p => {
+        const folderName = (p.folderPath || p.imagePath.substring(0, p.imagePath.lastIndexOf('/'))).split('/').pop().trim();
+        const pTags = getFolderTags(folderName);
+        const matches = pTags.some(t => activeTags.has(t));
+        p.targetOpacity = matches ? 1.0 : 0.0;
+        p.isInactive = !matches;
+    });
+}
+
+// Desktop toggle filter — called from desktop filter button clicks
+function toggleFilterTag(tag) {
+    // Mark as interacted so the draw loop stops resetting all opacities to 1
+    markUserInteracted();
+
+    if (activeTags.has(tag)) {
+        activeTags.delete(tag);
+    } else {
+        activeTags.add(tag);
+    }
+    // All 5 active = show everything, reset all buttons
+    if (activeTags.size >= ALL_FILTER_TAGS.length) {
+        activeTags.clear();
+    }
+    applyTagFilters();
+    updateFilterButtons();
+    updateBackButtonVisibility();
+}
+
 function filterByTag(tag) {
+    if (typeof window._hideExploreIndexBtn === 'function') window._hideExploreIndexBtn();
     // Clear "we are" mode when switching to another menu section
     if (isWeAreMode) {
         clearWeAreMode();
@@ -3557,47 +3721,99 @@ function showIndexFolderList(folders) {
     const isMobile = isMobileDevice();
     
     if (isMobile) {
+        // Dim canvas to 5% — list overlays it
+        if (canvas) canvas.style.opacity = '0.05';
+
         container.style.left = '14px';
         container.style.right = '14px';
-        container.style.top = '120px';
-        container.style.bottom = 'auto';
+        container.style.top = '80px';
+        container.style.bottom = '80px';
         container.style.transform = 'none';
         container.style.width = 'calc(100% - 28px)';
         container.style.alignItems = 'flex-start';
-        container.style.gap = '10px';
+        container.style.flexDirection = 'column';
+        container.style.gap = '0';
         container.style.overflowY = 'auto';
-        container.style.maxHeight = '70vh';
+        container.style.maxHeight = '';
         container.style.setProperty('display', 'flex', 'important');
         container.style.zIndex = '20000';
-        
-        // Hide mobile nav in folder list mode
+
+        // Group folders by year using cached meta; retry if still loading
+        const meta = window.__PROJECT_META__ || {};
+        const anyInFlight = folders.some(folder => {
+            const fname = (folder.path.split('/').pop() || folder.name || '').trim();
+            return meta[fname] === null; // null = fetch in progress
+        });
+        if (anyInFlight) {
+            setTimeout(() => showIndexFolderList(folders), 800);
+            return;
+        }
+        const byYear = {};
+        folders.forEach(folder => {
+            const fname = (folder.path.split('/').pop() || folder.name || '').trim();
+            const m = (meta[fname] && meta[fname] !== null) ? meta[fname] : parseProjectMeta(fname, null);
+            const yr = m.year || 0;
+            if (!byYear[yr]) byYear[yr] = [];
+            const cleanName = (folder.name || '').replace(/\s*#.*$/, '').trim() || folder.name;
+            const hashtag = m.projectType ? m.projectType.toLowerCase() : getFolderTags(fname).map(t => '#' + t).join(' ');
+            byYear[yr].push({ cleanName, hashtag, path: folder.path });
+        });
+        const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+
+        // Render year groups with staggered appearance
+        let animIdx = 0;
+        years.forEach(yr => {
+            // Year label
+            const yrEl = document.createElement('div');
+            yrEl.className = 'mob-cat-year-label';
+            yrEl.textContent = yr || '—';
+            yrEl.style.opacity = '0';
+            yrEl.style.transition = 'opacity 0.3s ease-out';
+            yrEl.style.marginTop = animIdx === 0 ? '0' : '20px';
+            container.appendChild(yrEl);
+            const yrIdx = animIdx++;
+            setTimeout(() => { yrEl.style.opacity = '1'; }, yrIdx * 80);
+
+            // Divider
+            const divEl = document.createElement('div');
+            divEl.className = 'mob-cat-divider';
+            divEl.style.marginBottom = '4px';
+            container.appendChild(divEl);
+
+            byYear[yr].forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'index-folder-item';
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.alignItems = 'baseline';
+                row.style.width = '100%';
+                row.style.padding = '6px 0';
+                row.style.whiteSpace = 'normal';
+
+                const nameEl = document.createElement('span');
+                nameEl.textContent = item.cleanName.toLowerCase();
+                nameEl.style.flex = '1';
+
+                const tagEl = document.createElement('span');
+                tagEl.textContent = item.hashtag;
+                tagEl.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.4);text-align:right;white-space:nowrap;flex-shrink:0;margin-left:12px;';
+
+                row.appendChild(nameEl);
+                row.appendChild(tagEl);
+                row.dataset.folderPath = item.path;
+                row.addEventListener('click', () => {
+                    selectIndexFolder(item.path, item.cleanName);
+                });
+                container.appendChild(row);
+
+                const rowIdx = animIdx++;
+                setTimeout(() => { row.classList.add('visible'); }, rowIdx * 80);
+            });
+        });
+
         setMobileNavVisibility(false);
-        
-        // Show mobileCategoryContent but keep inner content hidden (so back button is visible)
-        const categoryContent = document.getElementById('mobileCategoryContent');
-        if (categoryContent) {
-            categoryContent.classList.add('visible');
-            categoryContent.style.visibility = 'visible';
-            categoryContent.style.opacity = '1';
-            categoryContent.style.pointerEvents = 'none'; // Let clicks pass through to folder list
-            categoryContent.style.background = 'transparent';
-        }
-        
-        // Hide the inner content completely
-        const contentInner = document.querySelector('.mobile-category-content-inner');
-        if (contentInner) {
-            contentInner.style.display = 'none';
-            contentInner.style.visibility = 'hidden';
-            contentInner.style.opacity = '0';
-        }
-        
-        // Also hide title/body specifically
-        const categoryTitle = document.getElementById('mobileCategoryTitle');
-        const categoryBody = document.getElementById('mobileCategoryBody');
-        if (categoryTitle) categoryTitle.style.display = 'none';
-        if (categoryBody) categoryBody.style.display = 'none';
-        
-        // Ensure mobile back is visible in folder list mode
+
+        // Show back button
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
             mobileBack.style.setProperty('display', 'flex', 'important');
@@ -3684,16 +3900,9 @@ function hideIndexFolderList() {
 function selectIndexFolder(folderPath, folderName) {
     selectedIndexFolder = folderPath;
     
-    // Mobile: ensure back button stays fixed on top
+    // Mobile: show back button directly — do NOT make categoryContent overlay visible
+    // (it would intercept all touch events, breaking scroll in selection mode)
     if (isMobileDevice()) {
-        const categoryContent = document.getElementById('mobileCategoryContent');
-        if (categoryContent) {
-            categoryContent.classList.add('visible');
-            categoryContent.style.pointerEvents = 'auto';
-            categoryContent.style.visibility = 'visible';
-            categoryContent.style.opacity = '1';
-            categoryContent.style.background = 'transparent';
-        }
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
             mobileBack.style.display = 'flex';
@@ -3707,7 +3916,7 @@ function selectIndexFolder(folderPath, folderName) {
             mobileBack.style.background = 'transparent';
             mobileBack.style.backgroundColor = 'transparent';
             mobileBack.style.pointerEvents = 'auto';
-            mobileBack.style.zIndex = '20000';
+            mobileBack.style.zIndex = '20001';
         }
     }
     
@@ -3757,6 +3966,8 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
     alignedFolderPath = folderPath;
     
     if (isMobileDevice()) {
+        // Restore canvas opacity (may have been dimmed to 0.05 by folder list)
+        if (canvas) canvas.style.opacity = '';
         // Mobile: align in a simple vertical column (10% left padding, 60% width), non-interactive
     folderPoints.forEach(p => {
         p.isAligned = true;
@@ -3916,6 +4127,13 @@ function returnToFolderSelection() {
 }
 
 function clearFilter() {
+    // Clear desktop toggle filters if any are active
+    if (activeTags.size > 0) {
+        activeTags.clear();
+        applyTagFilters();
+        updateFilterButtons();
+    }
+
     // If in index mode, handle that instead
     if (isIndexMode) {
         if (selectedIndexFolder !== null) {
@@ -3927,7 +4145,7 @@ function clearFilter() {
         }
         return;
     }
-    
+
     if (!isFilterMode) return;
     
     // Hide project about text
@@ -3967,6 +4185,11 @@ function clearFilter() {
     
     updateFilterButtons();
     updateBackButtonVisibility();
+    // Restore exploreIndexBtn when returning to clean grid
+    if (!isMobileDevice()) {
+        const eib = document.getElementById('exploreIndexBtn');
+        if (eib) eib.style.display = '';
+    }
 }
 
 function handleFilteredImageClick(clickedPoint) {
@@ -4005,14 +4228,14 @@ function handleFilteredImageClick(clickedPoint) {
 }
 
 function updateFilterButtons() {
-    const buttons = document.querySelectorAll('.filter-button');
-    buttons.forEach(btn => {
-        if (btn.id === 'weAreButton') return;
+    document.querySelectorAll('.filter-button[data-tag]').forEach(btn => {
         const tag = btn.getAttribute('data-tag');
-        if (tag === currentFilterTag) {
+        if (activeTags.has(tag)) {
             btn.classList.add('active');
+            btn.style.top = '5px';
         } else {
             btn.classList.remove('active');
+            btn.style.top = '0px';
         }
     });
 }
@@ -4092,6 +4315,10 @@ function positionFilterButtons() {
         btn.style.left = `${currentX}px`;
         btn.style.position = 'absolute';
         btn.style.transform = 'translateX(0)';
+        // Preserve active slide (5px) on resize, otherwise reset to baseline
+        if (btn.getAttribute('data-tag')) {
+            btn.style.top = activeTags.has(btn.getAttribute('data-tag')) ? '5px' : '0px';
+        }
         
         // Measure button text width and add one space for next button
         const textWidth = tempCtx.measureText(btn.textContent).width * scale;
@@ -4107,8 +4334,9 @@ function positionFilterButtons() {
         const separatorPadding = 10 * scale;
         // Position we are button so that total spacing (3 spaces + 8 dashes + 3 spaces) fits between it and stage design
         const weAreLeft = stageDesignLeft - scaledSpacingWidth - weAreTextWidth - separatorPadding;
+        _weAreBtnExploreLeft = weAreLeft; // cache for transition animation
         weAreBtn.style.left = `${weAreLeft}px`;
-        weAreBtn.style.position = 'absolute';
+        weAreBtn.style.position = 'fixed';
         weAreBtn.style.right = 'auto';
         
         // Create separator element with 3 spaces + 8 dashes + 3 spaces
@@ -4134,119 +4362,59 @@ function positionFilterButtons() {
 
 // Show "We are" about text
 function showWeAreAbout() {
-    // Clear hover state first to prevent image zoom
     clearHoverState();
-    
-    // Hide project about and selection nav when entering we are
-    hideProjectAboutText();
-    hideSelectionNavButtons();
-    
-    // Clear any existing filter/alignment/connection first
-    if (isFilterMode) {
-        clearFilter();
-    }
-    if (alignedEmojiIndex !== null) {
-        unalignEmojis();
-    }
-    if (isConnectionMode) {
-        exitConnectionMode();
-    }
-    
-    // If coming from index mode (folder list), hide it and exit index state so only we are text is visible
-    if (isIndexMode) {
-        hideIndexFolderList();
-        isIndexMode = false;
-        indexModeTag = null;
-        indexModeFolders = [];
-        selectedIndexFolder = null;
-        currentFilterTag = null;
-        if (isMobileDevice()) {
-            setMobileNavVisibility(false);
-        }
-    }
-    
-    // Fade out all images and make everything inactive until another action (back or menu click)
-    points.forEach(p => {
-        p.targetOpacity = 0.0;
-        p.isInactive = true;
-    });
-    
     isWeAreMode = true;
-    
-    // Display about text from embedded constant
-    const aboutTextEl = document.getElementById('aboutText');
+
+    const overlay = document.getElementById('aboutOverlay');
+    const panel = document.getElementById('aboutPanel');
+    if (!overlay || !panel) return;
+
+    // Fill panel with about text
     const aboutContent = getAboutText();
-    if (aboutTextEl && aboutContent) {
-        // Format text: preserve line breaks
-        aboutTextEl.innerHTML = aboutContent.split('\n').map(line => {
-            const t = line.trim();
-            if (t === '') return '<br>';
-            if (t.startsWith('<')) return t;
-            return `<p>${line}</p>`;
-        }).join('');
-        aboutTextEl.style.display = 'block';
-        const weAreBtn = document.getElementById('weAreButton');
-        if (weAreBtn) {
-            const rect = weAreBtn.getBoundingClientRect();
-            aboutTextEl.style.left = `${rect.left}px`;
-        }
-        aboutTextEl.style.opacity = '0';
-        // Fade in after images fade out (1 second)
-        setTimeout(() => {
-            aboutTextEl.style.opacity = '1';
-        }, 1000);
-    } else {
-        console.error('About text not available or element not found');
-    }
-    
-    // Show back button
+    panel.innerHTML = (aboutContent || '').split('\n').map(line => {
+        const t = line.trim();
+        if (t === '') return '';
+        if (t.startsWith('<')) return t;
+        return `<p>${line}</p>`;
+    }).filter(Boolean).join('');
+
+    // Wire email links to mailto
+    panel.querySelectorAll('.about-contact-link').forEach(link => {
+        link.style.cursor = 'pointer';
+        link.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const email = link.textContent.trim();
+            window.location.href = 'mailto:' + email;
+        });
+    });
+
+    // Stop clicks inside panel from closing the overlay
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    // Click anywhere outside panel closes it
+    overlay.addEventListener('click', clearWeAreMode, { once: true });
+
+    // Show with fade
+    overlay.style.display = 'block';
+    panel.style.opacity = '0';
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => { panel.style.opacity = '1'; });
+    });
+
     updateBackButtonVisibility();
 }
 
-// Clear "We are" mode
-/**
- * Clears "We are" mode, restoring normal image visibility and resetting inactive flags.
- * Hides the about text overlay and restores all images to full opacity.
- */
 function clearWeAreMode() {
     if (!isWeAreMode) return;
-    
-    // Hide project about text
-    hideProjectAboutText();
-    
     isWeAreMode = false;
-    
-    const aboutTextEl = document.getElementById('aboutText');
-    if (aboutTextEl) {
-        aboutTextEl.style.opacity = '0';
-        setTimeout(() => {
-            aboutTextEl.style.display = 'none';
-        }, 500);
+
+    const overlay = document.getElementById('aboutOverlay');
+    const panel = document.getElementById('aboutPanel');
+    if (overlay) {
+        if (panel) panel.style.opacity = '0';
+        setTimeout(() => { overlay.style.display = 'none'; }, 250);
     }
-    
-    // Hide mobile category content overlay to restore touch navigation
-    if (isMobileDevice()) {
-        const categoryContent = document.getElementById('mobileCategoryContent');
-        if (categoryContent) {
-            categoryContent.classList.remove('visible');
-            categoryContent.style.pointerEvents = 'none';
-            categoryContent.style.visibility = 'hidden';
-            categoryContent.style.opacity = '0';
-        }
-        const contentInner = document.querySelector('.mobile-category-content-inner');
-        if (contentInner) {
-            contentInner.style.display = 'none';
-            contentInner.style.visibility = 'hidden';
-            contentInner.style.opacity = '0';
-        }
-    }
-    
-    // Restore images opacity and reset inactive flag
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-        p.isInactive = false; // Reset inactive flag
-    });
-    
+
     updateBackButtonVisibility();
 }
 
@@ -4289,10 +4457,12 @@ function draw() {
         hoverStartTime = 0;
         hoveredConnectedPoints = [];
         hoveredLinesOpacity = 0.0;
-        points.forEach(p => {
-            p.targetOpacity = 1.0;
-            p.isInactive = false;
-        });
+        if (activeTags.size === 0) {
+            points.forEach(p => {
+                p.targetOpacity = 1.0;
+                p.isInactive = false;
+            });
+        }
     }
 
     // MOBILE ONLY: freeze random grid visuals (no opacity/size animations) on home screen
@@ -4300,6 +4470,7 @@ function draw() {
         currentMobileCategory === null &&
         alignedEmojiIndex === null &&
         !isFilterMode &&
+        activeTags.size === 0 &&
         !isConnectionMode &&
         !isWeAreMode;
     if (isMobileHome) {
@@ -4744,7 +4915,7 @@ function draw() {
         }
         // Skip drawing if opacity effectively 0 (for random grid fade out)
         if (point.opacity < 0.01 && !point.isAligned && !point.isFiltered) {
-            if (isMobileVersion && alignedEmojiIndex === null && !isFilterMode && !isConnectionMode && currentMobileCategory === null && !isWeAreMode) {
+            if (isMobileVersion && alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode && currentMobileCategory === null && !isWeAreMode) {
                 point.opacity = 1.0;
                 point.targetOpacity = 1.0;
             } else {
@@ -4820,7 +4991,7 @@ function draw() {
                     
                     // Restore opacity for all images ONLY if not in selection/filter/connection mode
                     // In selection/filter/connection mode, opacity should remain as set by selection
-                    if (alignedEmojiIndex === null && !isFilterMode && !isConnectionMode) {
+                    if (alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode) {
                         points.forEach(p => {
                             p.targetOpacity = 1.0;
                         });
@@ -4840,7 +5011,7 @@ function draw() {
                         hoveredConnectedPoints.sort((a, b) => a.originalBaseX - b.originalBaseX);
                     }
                     // Don't apply fade/connection-mode logic if already in selection/filter/connection mode
-                    if (alignedEmojiIndex === null && !isFilterMode && !isConnectionMode) {
+                    if (alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode) {
                         const hoverDuration = currentTime - hoverStartTime;
                         const hoverTimeout = (typeof isMobileDevice === 'function' && isMobileDevice()) ? HOVER_FADE_TIMEOUT : HOVER_FADE_TIMEOUT_WEB;
                         if (hoverDuration >= hoverTimeout) {
@@ -4965,7 +5136,34 @@ function draw() {
             }
         }
     });
-    
+
+    // Draw extras: images in alignedEmojis that are NOT in points[] (images not picked for the random grid)
+    // The main sortedPoints loop skips them; we draw and animate them here.
+    if (isMobile && alignedEmojiIndex !== null && alignedEmojis && alignedEmojis.length > 0) {
+        const inPoints = new Set(points.map(p => p.imagePath));
+        alignedEmojis.forEach(point => {
+            if (inPoints.has(point.imagePath)) return; // already drawn by main loop
+            // Tick animation (same easing as main loop)
+            if (point.alignmentStartTime > 0) {
+                const elapsed = currentTime - point.alignmentStartTime;
+                const progress = Math.min(elapsed / alignmentAnimationDuration, 1.0);
+                const ep = easeOutLog(progress);
+                point.currentAlignedX = point.startX + (point.targetX - point.startX) * ep;
+                point.currentAlignedY = point.startY + (point.targetY - point.startY) * ep;
+                point.currentSize = point.startSize + (point.targetSize - point.startSize) * ep;
+                if (progress >= 1.0) point.alignmentStartTime = 0;
+            }
+            const imageData = imageCache[point.imagePath];
+            const img = imageData ? (imageData.img || imageData.thumb) : null;
+            if (!img || !imageData || imageData.error) return;
+            const dims = calculateImageDrawDimensions(point, imageData, point.currentSize);
+            const halfW = dims.width / 2;
+            const halfH = dims.height / 2;
+            ctx.globalAlpha = 1.0;
+            try { ctx.drawImage(img, point.currentAlignedX - halfW, point.currentAlignedY - halfH, dims.width, dims.height); } catch (_) {}
+        });
+    }
+
     // Auto-hover connection mode exit check: if mouse is not over any connected point, exit
     if (isConnectionMode && !isConnectionModeClicked && autoHoverTriggerPoint !== null) {
         // Check if mouse is over ANY connected point
@@ -4987,10 +5185,12 @@ function draw() {
             hoverStartTime = 0;
             hoveredConnectedPoints = [];
             hoveredLinesOpacity = 0.0;
-            // Restore opacity for all images
-            points.forEach(p => {
-                p.targetOpacity = 1.0;
-            });
+            // Restore opacity — respect active tag filters
+            if (activeTags.size > 0) {
+                applyTagFilters();
+            } else {
+                points.forEach(p => { p.targetOpacity = 1.0; });
+            }
         }
     }
     
@@ -5167,21 +5367,25 @@ function updateBackButtonVisibility() {
         if (!cachedBackButton) return;
     }
     
-    // Show back button when images are aligned, filtered, in connection mode, in "We are" mode, in index mode, or when mobile category content is open
+    // Show back button when: images aligned, in about mode, in connection mode, in index mode, mobile category open
+    // (desktop toggle filter no longer uses a back button)
     if (alignedEmojiIndex !== null || isFilterMode || isWeAreMode || isConnectionMode || isIndexMode || (isMobileVersion && currentMobileCategory !== null)) {
         cachedBackButton.style.display = 'flex';
         cachedBackButton.style.visibility = 'visible';
         cachedBackButton.style.opacity = '1';
-        // Force position for mobile - ensure it's at bottom right
         if (isMobileDevice()) {
             cachedBackButton.style.top = 'auto';
             cachedBackButton.style.bottom = '20px';
             cachedBackButton.style.right = '20px';
             cachedBackButton.style.left = 'auto';
             cachedBackButton.style.zIndex = '10000';
+        } else {
+            // Lift above about overlay when in about mode so back button is visible and clickable
+            cachedBackButton.style.zIndex = isWeAreMode ? '2100' : '';
         }
     } else {
         cachedBackButton.style.display = 'none';
+        cachedBackButton.style.zIndex = '';
     }
 }
 
@@ -5279,8 +5483,8 @@ function initMobileHomepageNav() {
     
     const mobileNav = document.getElementById('mobileHomepageNav');
     const navLines = document.getElementById('mobileNavLines');
-    const navLabels = document.querySelectorAll('.mobile-nav-label');
-    
+    const navLabels = mobileNav ? mobileNav.querySelectorAll('.mobile-nav-label') : [];
+
     if (!mobileNav || !navLines || navLabels.length === 0) {
         return;
     }
@@ -5319,9 +5523,17 @@ function initMobileHomepageNav() {
     }
 }
 
-// Intersection for nav lines: center of viewport to stabilize layout across devices
+/** Layout viewport center for nav lines (match fixed labels + SVG; visualViewport differs on mobile and caused an extra/misaligned spoke). */
+function getMobileNavLayoutSize() {
+    return {
+        width: window.innerWidth || document.documentElement.clientWidth || 0,
+        height: window.innerHeight || document.documentElement.clientHeight || 0,
+    };
+}
+
+// Intersection for nav lines: center of layout viewport (not visualViewport — avoids stray line to “text” area)
 function calculateLinesIntersection(labels) {
-    const { width, height } = getViewportSize();
+    const { width, height } = getMobileNavLayoutSize();
     return { x: width / 2, y: height / 2 };
 }
 
@@ -5354,14 +5566,14 @@ function lineIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
 // Draw navigation lines from center intersection to labels
 function drawMobileNavLines(svg, labels) {
     const svgNS = 'http://www.w3.org/2000/svg';
-    const { width: vpW, height: vpH } = getViewportSize();
-    
+    const { width: vpW, height: vpH } = getMobileNavLayoutSize();
+
     // Clear existing lines
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${vpW} ${vpH}`);
     svg.setAttribute('width', vpW);
     svg.setAttribute('height', vpH);
-    
+
     // Calculate intersection point of lines connecting the 4 labels
     const intersection = calculateLinesIntersection(labels);
     const centerX = intersection ? intersection.x : vpW / 2;
@@ -5396,6 +5608,12 @@ function drawMobileNavLines(svg, labels) {
         const labelY = rect.top + rect.height / 2;
         
         // Create line from intersection to label
+        const dx = labelX - centerX;
+        const dy = labelY - centerY;
+        if (dx * dx + dy * dy < 64 * 64) {
+            return;
+        }
+
         const line = document.createElementNS(svgNS, 'line');
         line.setAttribute('x1', centerX);
         line.setAttribute('y1', centerY);
@@ -5404,7 +5622,7 @@ function drawMobileNavLines(svg, labels) {
         line.setAttribute('stroke', '#fff');
         line.setAttribute('stroke-width', '0.5');
         line.setAttribute('opacity', '0.75'); // +25% vs 0.6 (mobile home only)
-        
+
         svg.appendChild(line);
     });
 }
@@ -5525,15 +5743,17 @@ function showMobileCategoryContent(category) {
     
     // Set category title
     const categoryLabels = {
-        'we-are': 'we are',
+        'we-are': '',
         'stage': 'visual research',
-        'install': 'explore',
-        'tech': 'space n sound',
-        'concept': 'make',
+        'install': 'spatial design',
+        'tech': 'sonic core',
+        'concept': 'materiality',
         'spatial': 'perform'
     };
     
     categoryTitle.textContent = categoryLabels[category] || category;
+    // "All About" should show only body text (no "we are" heading/sign).
+    categoryTitle.style.display = category === 'we-are' ? 'none' : 'block';
     
     // Set category body content
     if (category === 'we-are') {
@@ -5569,6 +5789,9 @@ function showMobileCategoryContent(category) {
 
 // Handle mobile category back
 function handleMobileCategoryBack() {
+    // Restore canvas opacity if it was dimmed by showMobileCategoryList
+    if (canvas) canvas.style.opacity = '';
+
     // If in "we are" mode, clear it (fade out about text in 0.25s)
     if (isWeAreMode) {
         clearWeAreMode();
@@ -5672,14 +5895,15 @@ function handleMobileCategoryBack() {
         categoryContent.style.pointerEvents = 'none';
         categoryContent.style.visibility = 'hidden';
         categoryContent.style.opacity = '0';
+        categoryContent.style.background = 'transparent'; // reset from showMobileCategoryIndex
     }
-    
+
     // Fade in random grid (canvas)
     const canvasEl = document.getElementById('canvas');
     if (canvasEl) {
         canvasEl.classList.remove('mobile-grid-fade-out');
     }
-    
+
     // Show navigation again
     setMobileNavVisibility(true);
     
@@ -5709,6 +5933,456 @@ function handleMobileCategoryBack() {
     requestAnimationFrame(function () {
         updateMobileGridPointerState();
     });
+}
+
+// ——— Project Index ———
+
+const HASHTAG_DISPLAY = { stage: '#vis', installation: '#exp', concept: '#mat', tech: '#snd', spatial: '#pf' };
+
+// Collect unique top-level Artsy folders from imagePaths (exclude hidden/sub)
+function getTopLevelFolders() {
+    const seen = new Set();
+    const result = [];
+    imagePaths.forEach(p => {
+        const topLevel = p.includes('/') ? p.split('/')[0] : null;
+        if (!topLevel || topLevel.startsWith('0_') || topLevel.startsWith('thumb')) return;
+        if (!seen.has(topLevel)) {
+            seen.add(topLevel);
+            result.push(topLevel);
+        }
+    });
+    return result;
+}
+
+// Derive display hashtags for a folder name
+function getFolderDisplayTags(folderName) {
+    const internalTags = getFolderTags(folderName);
+    return internalTags.map(t => HASHTAG_DISPLAY[t] || t).filter(Boolean);
+}
+
+// Async: fetch about.txt for all folders and cache in window.__PROJECT_META__
+function prefetchProjectMeta() {
+    if (!window.__PROJECT_META__) window.__PROJECT_META__ = {};
+    const origin = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    getTopLevelFolders().forEach(folder => {
+        if (window.__PROJECT_META__[folder] !== undefined) return;
+        window.__PROJECT_META__[folder] = null; // mark in-flight
+        const encodedFolder = folder.split('/').map(s => encodeURIComponent(s)).join('/');
+        fetch(origin + pathPrefix + '/img/' + encodedFolder + '/about.txt')
+            .then(r => r.ok ? r.text() : null)
+            .catch(() => null)
+            .then(text => {
+                window.__PROJECT_META__[folder] = parseProjectMeta(folder, text);
+            });
+    });
+}
+
+function stripParens(str) {
+    // Strip wrapping parens: "(foo)" → "foo", "()" → ""
+    return (str || '').replace(/^\s*\(([^)]*)\)\s*$/, '$1').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+}
+
+function parseProjectMeta(folderName, text) {
+    const cleanName = folderName.replace(/\s*#.*$/, '').trim();
+    const tags = getFolderDisplayTags(folderName);
+    let name = cleanName;
+    let year = null;
+    let projectType = null;
+    if (text) {
+        const nm = text.match(/^name:\s*(.+)/mi);
+        if (nm) {
+            const raw = stripParens(nm[1].trim());
+            name = raw || cleanName;
+        }
+        const yr = text.match(/^year:\s*(.+)/mi);
+        if (yr) {
+            const nums = yr[1].match(/\d{4}/g);
+            if (nums) year = parseInt(nums[nums.length - 1]);
+        }
+        const pt = text.match(/^project type:\s*(.+)/mi);
+        if (pt) {
+            const raw = stripParens(pt[1].trim());
+            if (raw) projectType = raw.toLowerCase();
+        }
+    }
+    // First non-poster image in this folder for preview
+    const previewPath = imagePaths.find(p => p.startsWith(folderName + '/') && !p.endsWith('_poster.jpg') && !p.endsWith('.gif'));
+    return { name, year, tags, projectType, folderName, previewPath: previewPath || null };
+}
+
+// Cache of #weAreButton's explore-mode left position (set by positionFilterButtons)
+let _weAreBtnExploreLeft = 0;
+
+// Slide #weAreButton to its index-mode position (above project names column)
+function _weAreBtnToIndexPos() {
+    const btn = document.getElementById('weAreButton');
+    if (!btn || isMobileDevice()) return;
+    btn.style.transition = ''; // use CSS default: left 0.5s ease-out
+    btn.style.left = '50px';
+}
+
+// Animate #weAreButton from current position back to its explore position
+function _weAreBtnToExplorePos() {
+    const btn = document.getElementById('weAreButton');
+    if (!btn || isMobileDevice()) return;
+    // snapshot current pixel left so transition starts from there
+    const currentLeft = btn.getBoundingClientRect().left;
+    btn.style.transition = 'none';
+    btn.style.left = currentLeft + 'px';
+    // force reflow so transition fires
+    void btn.offsetWidth;
+    btn.style.transition = 'left 0.5s ease-out';
+    btn.style.left = (_weAreBtnExploreLeft || window.innerWidth * 0.25) + 'px';
+}
+
+function showProjectIndex() {
+    const el = document.getElementById('projectIndex');
+    if (el) el.classList.add('visible');
+    const exploreIndexBtn = document.getElementById('exploreIndexBtn');
+    if (exploreIndexBtn) exploreIndexBtn.style.display = 'none';
+    // Prep filter buttons at opacity 0 so they can stagger back in on return
+    if (!isMobileDevice()) {
+        document.querySelectorAll('.filter-button:not(#weAreButton)').forEach(btn => {
+            btn.style.opacity = '0';
+            btn.style.transition = 'none';
+        });
+        _weAreBtnToIndexPos();
+    }
+    renderProjectIndex();
+}
+
+function hideProjectIndex() {
+    const el = document.getElementById('projectIndex');
+    if (el) el.classList.remove('visible');
+}
+
+// Animate project index closing, then run callback.
+// slideAboutBtn: if true, simultaneously slides #weAreButton to explore position (index→explore transition).
+//                if false, #weAreButton stays put (e.g. opening about from index keeps it in index position).
+function _closeProjectIndexAnimated(callback, slideAboutBtn) {
+    const el = document.getElementById('projectIndex');
+    if (!el || !el.classList.contains('visible')) {
+        if (callback) callback();
+        return;
+    }
+    el.classList.add('fading-out');
+    if (slideAboutBtn) {
+        _weAreBtnToExplorePos();
+    }
+    setTimeout(() => {
+        el.classList.remove('visible');
+        el.classList.remove('fading-out');
+        if (callback) callback();
+    }, 500);
+}
+
+// Stagger filter buttons back in after index close.
+// Order: ––––––, visual research, spatial design, sonic core, materiality, perform.
+// Each fades in over 0.5s with a 0.2s delay between items — smooth wave via CSS transition.
+function _staggerFilterButtonsIn() {
+    const sep = document.getElementById('dashSeparator');
+    const filterBtns = Array.from(document.querySelectorAll(
+        '.filter-button:not(#weAreButton):not(#backButton)'
+    ));
+    const items = sep ? [sep, ...filterBtns] : filterBtns;
+    items.forEach((el, i) => {
+        el.style.transition = 'none';
+        el.style.opacity = '0';
+        setTimeout(() => {
+            el.style.transition = 'opacity 1s ease-out';
+            el.style.opacity = '1';
+            // Clear inline opacity after fade so CSS :hover can work
+            setTimeout(() => {
+                el.style.opacity = '';
+                el.style.transition = '';
+            }, 1050);
+        }, 20 + i * 350);
+    });
+}
+
+function renderProjectIndex() {
+    const list = document.getElementById('projectIndexList');
+    if (!list) return;
+
+    const folders = getTopLevelFolders();
+    const meta = window.__PROJECT_META__ || {};
+
+    const projects = folders.map(folder => {
+        const m = meta[folder];
+        return (m && m !== null) ? m : parseProjectMeta(folder, null);
+    });
+
+    projects.sort((a, b) => {
+        if (a.year === null && b.year === null) return a.name.localeCompare(b.name);
+        if (a.year === null) return 1;
+        if (b.year === null) return -1;
+        if (b.year !== a.year) return b.year - a.year;
+        return a.name.localeCompare(b.name);
+    });
+
+    const groups = [];
+    let currentYear = undefined;
+    projects.forEach(p => {
+        const y = p.year || 'unknown';
+        if (y !== currentYear) {
+            currentYear = y;
+            groups.push({ year: y, projects: [] });
+        }
+        groups[groups.length - 1].projects.push(p);
+    });
+
+    // Preview image element
+    const previewEl = document.getElementById('projectIndexPreview');
+    const previewImg = document.getElementById('projectIndexPreviewImg');
+
+    list.innerHTML = '';
+
+    // Column header row (once, above first group)
+    const colHeader = document.createElement('div');
+    colHeader.className = 'project-index-col-header';
+    const hdrName = document.createElement('span');
+    hdrName.className = 'project-index-col-hdr-name';
+    const hdrType = document.createElement('span');
+    hdrType.className = 'project-index-col-hdr-type';
+    hdrType.textContent = 'project type';
+    colHeader.appendChild(hdrName);
+    colHeader.appendChild(hdrType);
+    list.appendChild(colHeader);
+
+    const origin = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+
+    groups.forEach(group => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'project-index-year-group';
+
+        const yearEl = document.createElement('div');
+        yearEl.className = 'project-index-year-label';
+        yearEl.textContent = group.year === 'unknown' ? '—' : group.year;
+        groupEl.appendChild(yearEl);
+
+        const divider = document.createElement('div');
+        divider.className = 'project-index-divider';
+        groupEl.appendChild(divider);
+
+        group.projects.forEach(proj => {
+            const row = document.createElement('div');
+            row.className = 'project-index-row';
+            row.dataset.folder = proj.folderName;
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'project-index-name';
+            nameEl.textContent = proj.name.toLowerCase();
+
+            // Right cell: project type (from about.txt) or hashtags as fallback
+            const typeEl = document.createElement('span');
+            typeEl.className = 'project-index-tags';
+            typeEl.textContent = proj.projectType || proj.tags.join(' · ');
+
+            row.appendChild(nameEl);
+            row.appendChild(typeEl);
+
+            // Hover: show preview image
+            if (proj.previewPath) {
+                const encodedPreview = proj.previewPath.split('/').map(s => encodeURIComponent(s)).join('/');
+                const previewSrc = origin + pathPrefix + '/img/' + encodedPreview;
+                row.addEventListener('mouseenter', () => {
+                    if (previewImg) previewImg.src = previewSrc;
+                    if (previewEl) previewEl.classList.add('visible');
+                });
+                row.addEventListener('mouseleave', () => {
+                    if (previewEl) previewEl.classList.remove('visible');
+                });
+            }
+
+            // Click: open dedicated project gallery
+            row.addEventListener('click', () => {
+                showProjectGallery(proj);
+            });
+
+            groupEl.appendChild(row);
+        });
+
+        list.appendChild(groupEl);
+    });
+}
+
+// ——— Gallery state ———
+let _galleryImages = [];
+let _galleryNextIdx = 0;
+let _galleryImgData = [];
+let _gallerySpawnTimer = null;
+let _galleryCurrentProj = null;
+
+const GALLERY_SPAWN_MS = 1200;  // 1.2 s between auto-spawns
+const GALLERY_IS_MOBILE = () => window.innerWidth < 768 || ('ontouchstart' in window);
+
+function showProjectGallery(proj) {
+    hideProjectIndex();
+    clearInterval(_gallerySpawnTimer);
+    _galleryCurrentProj = proj;
+
+    // Text panel
+    const nameEl  = document.getElementById('galleryProjectName');
+    const typeEl  = document.getElementById('galleryProjectType');
+    const fieldsEl = document.getElementById('galleryAboutFields');
+    const moreEl  = document.getElementById('galleryMoreText');
+    if (nameEl)  nameEl.textContent  = (proj.name || proj.folderName).toLowerCase();
+    if (typeEl)  typeEl.textContent  = (proj.projectType || '').toLowerCase();
+    if (fieldsEl) fieldsEl.innerHTML = '';
+    if (moreEl)  moreEl.textContent  = '';
+
+    // Fetch about.txt + more.txt for the text panel
+    _loadGalleryText(proj);
+
+    // Collect images (no poster files)
+    _galleryImages = imagePaths.filter(p =>
+        p.startsWith(proj.folderName + '/') && !p.endsWith('_poster.jpg')
+    );
+    _galleryNextIdx = 0;
+    _galleryImgData = [];
+
+    const area = document.getElementById('galleryImageArea');
+    if (area) area.innerHTML = '';
+
+    const el = document.getElementById('projectGallery');
+    if (el) el.classList.add('visible');
+
+    if (!_galleryImages.length) return;
+
+    // Spawn first image immediately, then every 1.2s until all shown
+    _spawnGalleryImage();
+    _galleryNextIdx = 1;
+    _gallerySpawnTimer = setInterval(() => {
+        if (_galleryNextIdx >= _galleryImages.length) {
+            clearInterval(_gallerySpawnTimer);
+            _gallerySpawnTimer = null;
+            return;
+        }
+        _spawnGalleryImage();
+        _galleryNextIdx++;
+    }, GALLERY_SPAWN_MS);
+}
+
+function hideProjectGallery() {
+    clearInterval(_gallerySpawnTimer);
+    _gallerySpawnTimer = null;
+    _galleryImgData = [];
+    _galleryCurrentProj = null;
+    const el = document.getElementById('projectGallery');
+    if (el) el.classList.remove('visible');
+    const area = document.getElementById('galleryImageArea');
+    if (area) area.innerHTML = '';
+    showProjectIndex();
+}
+
+function _spawnGalleryImage() {
+    const area = document.getElementById('galleryImageArea');
+    if (!area || !_galleryImages.length) return;
+
+    const origin     = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    const imgPath    = _galleryImages[Math.min(_galleryNextIdx, _galleryImages.length - 1)];
+    const encoded    = imgPath.split('/').map(s => encodeURIComponent(s)).join('/');
+    const src        = origin + pathPrefix + '/img/' + encoded;
+
+    const img = document.createElement('img');
+    img.src = src;
+    img.className = 'gallery-spawned-img';
+    img.draggable = false;
+
+    const isMob = GALLERY_IS_MOBILE();
+
+    const zBase = 10 + _galleryImgData.length;
+
+    if (!isMob) {
+        // Desktop: random absolute position within the area
+        const aW = area.offsetWidth  || 600;
+        const aH = area.offsetHeight || 500;
+        const maxX = Math.max(0, aW * 0.46);
+        const maxY = Math.max(0, aH * 0.43);
+        img.style.left   = (Math.random() * maxX) + 'px';
+        img.style.top    = (Math.random() * maxY) + 'px';
+        img.style.zIndex = zBase;
+        img.style.cursor = 'pointer';
+        area.appendChild(img);
+        _galleryImgData.push({ el: img });
+    } else {
+        // Mobile: append in flow (CSS handles layout)
+        img.style.zIndex = zBase;
+        area.appendChild(img);
+        _galleryImgData.push({ el: img });
+        setTimeout(() => area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' }), 100);
+    }
+
+    // Click: bring to top
+    img.addEventListener('click', () => {
+        const maxZ = _galleryImgData.reduce((m, d) => Math.max(m, parseInt(d.el.style.zIndex) || 0), 0);
+        img.style.zIndex = maxZ + 1;
+    });
+
+    // Fade in
+    requestAnimationFrame(() => requestAnimationFrame(() => { img.style.opacity = '1'; }));
+}
+
+// Prev / Next: immediately show previous / next image
+function _galleryPrev() {
+    if (!_galleryImages.length) return;
+    _galleryNextIdx = (_galleryNextIdx - 1 + _galleryImages.length) % _galleryImages.length;
+    _spawnGalleryImage();
+}
+
+function _galleryNext() {
+    if (!_galleryImages.length) return;
+    _galleryNextIdx = (_galleryNextIdx + 1) % _galleryImages.length;
+    _spawnGalleryImage();
+}
+
+function _loadGalleryText(proj) {
+    const origin     = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    const encoded    = proj.folderName.split('/').map(s => encodeURIComponent(s)).join('/');
+    const base       = origin + pathPrefix + '/img/' + encoded;
+
+    fetch(base + '/about.txt')
+        .then(r => r.ok ? r.text() : null).catch(() => null)
+        .then(text => {
+            if (!text) return;
+            const fieldsEl = document.getElementById('galleryAboutFields');
+            if (!fieldsEl) return;
+            fieldsEl.innerHTML = '';
+            const KEYS = ['year', 'location', 'tags'];
+            KEYS.forEach(key => {
+                const m = text.match(new RegExp('^' + key + ':\\s*(.+)', 'mi'));
+                if (!m) return;
+                const val = m[1].trim();
+                if (!val || val === '()') return;
+                const row = document.createElement('div');
+                row.className = 'gallery-about-field';
+                const k = document.createElement('span');
+                k.className = 'gallery-about-key';
+                k.textContent = key;
+                const v = document.createElement('span');
+                v.className = 'gallery-about-val';
+                v.textContent = val.toLowerCase();
+                row.appendChild(k);
+                row.appendChild(v);
+                fieldsEl.appendChild(row);
+            });
+        });
+
+    fetch(base + '/more.txt')
+        .then(r => r.ok ? r.text() : null).catch(() => null)
+        .then(text => {
+            const moreEl = document.getElementById('galleryMoreText');
+            if (moreEl && text && text.trim()) {
+                moreEl.textContent = text.trim().toLowerCase();
+                moreEl.style.display = '';
+            } else if (moreEl) {
+                moreEl.style.display = 'none';
+            }
+        });
 }
 
 function runAppInit() {
@@ -5774,6 +6448,58 @@ function runAppInit() {
         }, { passive: false });
     }
     
+    // ——— Choice screen + index button handlers ———
+    const choiceExploreBtn = document.getElementById('choiceExplore');
+    if (choiceExploreBtn) {
+        choiceExploreBtn.addEventListener('click', () => enterExploreMode());
+    }
+    const choiceIndexBtn = document.getElementById('choiceIndex');
+    if (choiceIndexBtn) {
+        choiceIndexBtn.addEventListener('click', () => {
+            const li = document.getElementById('loadingIndicator');
+            if (li) {
+                li.classList.add('hidden');
+                setTimeout(() => { if (li.parentNode) li.parentNode.removeChild(li); }, 1000);
+            }
+            showProjectIndex();
+        });
+    }
+    const indexBackBtn = document.getElementById('indexBackBtn');
+    if (indexBackBtn) {
+        indexBackBtn.addEventListener('click', () => {
+            // Animated: fade index out in 0.5s, slide about button, then stagger filter buttons in
+            _closeProjectIndexAnimated(() => {
+                enterExploreMode();
+                _staggerFilterButtonsIn();
+            }, true);
+        });
+    }
+    const galleryBackBtn = document.getElementById('galleryBackBtn');
+    if (galleryBackBtn) {
+        galleryBackBtn.addEventListener('click', () => hideProjectGallery());
+    }
+    const galleryPrevBtn = document.getElementById('galleryPrevBtn');
+    if (galleryPrevBtn) {
+        galleryPrevBtn.addEventListener('click', () => _galleryPrev());
+    }
+    const galleryNextBtn = document.getElementById('galleryNextBtn');
+    if (galleryNextBtn) {
+        galleryNextBtn.addEventListener('click', () => _galleryNext());
+    }
+    const exploreIndexBtn = document.getElementById('exploreIndexBtn');
+    if (exploreIndexBtn) {
+        exploreIndexBtn.addEventListener('click', () => {
+            exploreIndexBtn.style.display = 'none';
+            showProjectIndex();
+        });
+    }
+    // Hide exploreIndexBtn whenever a non-grid state is entered (point 5)
+    function _hideExploreIndexBtn() {
+        const btn = document.getElementById('exploreIndexBtn');
+        if (btn) btn.style.display = 'none';
+    }
+    window._hideExploreIndexBtn = _hideExploreIndexBtn;
+
     // Setup filter buttons (only for desktop)
     if (!isMobileDevice()) {
     positionFilterButtons();
@@ -5783,14 +6509,6 @@ function runAppInit() {
             filterButtonsRaf = requestAnimationFrame(() => {
                 filterButtonsRaf = 0;
         positionFilterButtons();
-        if (isWeAreMode) {
-            const aboutTextEl = document.getElementById('aboutText');
-            const weAreBtn = document.getElementById('weAreButton');
-            if (aboutTextEl && weAreBtn) {
-                const rect = weAreBtn.getBoundingClientRect();
-                aboutTextEl.style.left = `${rect.left}px`;
-            }
-        }
             });
     });
     
@@ -5842,7 +6560,6 @@ function runAppInit() {
         });
         
         if (btn.id === 'weAreButton') {
-            // Handle "we are" button - show about text
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 showWeAreAbout();
@@ -5853,7 +6570,7 @@ function runAppInit() {
             const tag = btn.getAttribute('data-tag');
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                filterByTag(tag);
+                toggleFilterTag(tag);
             });
         }
     });
@@ -5866,8 +6583,9 @@ function runAppInit() {
             if (resizeRaf) cancelAnimationFrame(resizeRaf);
             resizeRaf = requestAnimationFrame(() => {
                 resizeRaf = 0;
+                const mobileNavEl = document.getElementById('mobileHomepageNav');
                 const navLines = document.getElementById('mobileNavLines');
-                const navLabels = document.querySelectorAll('.mobile-nav-label');
+                const navLabels = mobileNavEl ? mobileNavEl.querySelectorAll('.mobile-nav-label') : [];
                 if (navLines && navLabels.length > 0 && isMobileVersion) {
                     drawMobileNavLines(navLines, navLabels);
                 }
@@ -5901,6 +6619,9 @@ if (document.readyState === 'loading') {
 } else {
     runAppInit();
 }
+
+// Preload Bandcamp URLs in the background after script loads
+setTimeout(_preloadBandcampUrls, 500);
 
 // ========== About.txt functionality ==========
 
@@ -5962,10 +6683,15 @@ function loadAndDisplayAboutText(folderPath) {
     const aboutPromise = fetch(aboutUrl).then(r => r.ok ? r.text() : Promise.reject(new Error('about')));
     const morePromise = fetch(moreUrl).then(r => r.ok ? r.text() : null).catch(() => null);
     const extraPromise = fetch(extraUrl).then(r => r.ok ? r.text() : null).catch(() => null);
-    Promise.all([aboutPromise, morePromise, extraPromise])
-        .then(([aboutText, moreText, extraText]) => {
+    const bcPromise = fetch(base + '/bandcamp.txt').then(r => r.ok ? r.text() : null).catch(() => null);
+    Promise.all([aboutPromise, morePromise, extraPromise, bcPromise])
+        .then(([aboutText, moreText, extraText, bcText]) => {
             const moreContent = (moreText && moreText.trim()) || (extraText && extraText.trim()) || null;
             parseAndDisplayAboutText(aboutText, moreContent ? (moreContent.trim()) : null);
+            if (bcText && bcText.trim()) {
+                if (!window.__BC_URLS__) window.__BC_URLS__ = {};
+                window.__BC_URLS__[pathWithoutPrefix] = bcText.trim();
+            }
         })
         .catch(() => {
             displayProjectAboutText('~', [], null);
@@ -6229,34 +6955,28 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
     infoEl.style.visibility = 'visible';
     
     if (isMobileDevice()) {
-        // Mobile: position handled by draw() using world coords (same approach as more.txt)
+        // Mobile: same bottom-left layout as web
         if (containerEl.parentNode && containerEl.parentNode !== document.body) {
             document.body.appendChild(containerEl);
         }
-        const categoryContent = document.getElementById('mobileCategoryContent');
-        if (categoryContent) {
-            categoryContent.classList.add('visible');
-            categoryContent.style.pointerEvents = 'none';
-            categoryContent.style.visibility = 'visible';
-            categoryContent.style.opacity = '1';
-            categoryContent.style.background = 'transparent';
-        }
         containerEl.style.position = 'fixed';
+        containerEl.style.left = '20px';
+        containerEl.style.right = 'auto';
+        containerEl.style.bottom = 'calc(60px + env(safe-area-inset-bottom, 0px))';
+        containerEl.style.top = 'auto';
         containerEl.style.display = 'flex';
         containerEl.style.flexDirection = 'column';
-        containerEl.style.alignItems = 'stretch';
-        containerEl.style.gap = '10px';
-        containerEl.style.overflow = 'visible';
+        containerEl.style.alignItems = 'flex-start';
+        containerEl.style.gap = '6px';
         containerEl.style.zIndex = '10002';
         containerEl.style.transform = 'none';
+        containerEl.style.maxWidth = 'calc(100vw - 80px)';
         nameEl.style.position = 'static';
         nameEl.style.textAlign = 'left';
         infoEl.style.position = 'static';
         infoEl.style.textAlign = 'left';
-        if (moreEl && moreEl.textContent.trim()) moreEl.style.visibility = 'hidden';
         void containerEl.offsetHeight;
         setTimeout(() => { nameEl.style.opacity = '1'; }, 0);
-        // Trigger relayout so about block space is reserved in the gallery
         scheduleAlignedMobileRelayoutIfNeeded();
     }
     
