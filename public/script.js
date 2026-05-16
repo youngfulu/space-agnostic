@@ -38,9 +38,6 @@ function mobileReturnHome() {
     if (isWeAreMode) {
         clearWeAreMode();
     }
-    if (isFilterMode) {
-        clearFilter();
-    }
     if (isConnectionMode) {
         exitConnectionMode();
     }
@@ -95,6 +92,31 @@ if (!canvas) {
 const ctx = canvas ? canvas.getContext('2d') : null;
 if (!ctx && canvas) {
     console.error('Could not get 2d context from canvas!');
+}
+
+let canvasBoundingRect = null;
+function getCanvasRect() {
+    if (!canvasBoundingRect) canvasBoundingRect = canvas.getBoundingClientRect();
+    return canvasBoundingRect;
+}
+
+function showMobileBackButton() {
+    const btn = document.getElementById('mobileCategoryBack');
+    if (!btn) return;
+    btn.style.setProperty('display', 'flex', 'important');
+    btn.style.pointerEvents = 'auto';
+    btn.style.opacity = '1';
+    btn.style.visibility = 'visible';
+    btn.style.position = 'fixed';
+    btn.style.zIndex = '10010';
+}
+function hideMobileBackButton() {
+    const btn = document.getElementById('mobileCategoryBack');
+    if (!btn) return;
+    btn.style.setProperty('display', 'none', 'important');
+    btn.style.pointerEvents = 'none';
+    btn.style.opacity = '0';
+    btn.style.visibility = 'hidden';
 }
 
 // Performance/debug flags
@@ -353,9 +375,6 @@ const MOBILE_GRID_FADE_OUT_SPEED = 1 / (MOBILE_GRID_FADE_OUT_DURATION_MS / (1000
 // Mobile version state
 let isMobileVersion = false;
 let currentMobileCategory = null;
-let allowMobileAutoConnection = false;
-let mobileAutoConnectionTimer = null;
-let mobileAutoConnectionExitTimer = null;
 
 // Mobile auto dotted-line animation (background, non-interactive)
 const MOBILE_AUTO_LINE_MAX = 6;
@@ -420,7 +439,6 @@ function updateMobileAutoLines(now) {
     const inMobileHome = isMobileVersion &&
         currentMobileCategory === null &&
         alignedEmojiIndex === null &&
-        !isFilterMode &&
         !isConnectionMode &&
         !isWeAreMode;
     
@@ -580,7 +598,6 @@ function calculateConnectionLineImageSize(point, imageData) {
 function scheduleAlignedDesktopRelayoutIfNeeded(changedImagePath = null) {
     // Only matters for desktop horizontal alignment layout
     if (alignedEmojiIndex === null) return;
-    if (isFilterMode) return; // filter mode has its own layout / transitions
     if (isMobileDevice()) return;
     if (!alignedEmojis || alignedEmojis.length === 0) return;
 
@@ -790,7 +807,6 @@ function layoutAlignedEmojisDesktop(animate = true) {
 function scheduleAlignedMobileRelayoutIfNeeded(changedImagePath = null) {
     // Only matters for mobile vertical alignment layout
     if (alignedEmojiIndex === null) return;
-    if (isFilterMode) return;
     if (!isMobileDevice()) return;
     if (!alignedEmojis || alignedEmojis.length === 0) return;
 
@@ -984,8 +1000,6 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
 
 // Filter state
 let currentFilterTag = null; // null = no filter, otherwise the tag to filter by
-let filteredImages = []; // Array of filtered image points
-let isFilterMode = false; // Whether we're in filter mode (legacy / mobile index mode)
 // Desktop toggle filter — set of currently active tag strings (up to 5)
 let activeTags = new Set();
 const ALL_FILTER_TAGS = ['stage', 'install', 'tech', 'concept', 'spatial'];
@@ -998,14 +1012,6 @@ let selectedIndexFolder = null; // Currently selected folder in index mode
 let indexModeTag = null; // Current hashtag being filtered
 
 // Hashtag to category mapping
-const HASHTAG_MAP = {
-    'stage': '#vis',
-    'install': '#exp',
-    'concept': '#mat',
-    'tech': '#snd',
-    'spatial': '#pf'
-};
-
 // Folder name to tags mapping (since imagePaths don't include hashtags)
 // Maps clean folder names to their hashtag categories
 const FOLDER_TAGS = {
@@ -1345,8 +1351,8 @@ const imagePaths = [
 // Image cache: thumb = grid (small), img = full-res (selection mode). Draw uses img || thumb.
 const imageCache = {};
 let imagesLoaded = 0;
+const countedImagePaths = new Set();
 let totalImages = 0;
-let imagesLoadedSuccessfully = 0;
 const imageLoadPromises = new Map();
 
 // Loading text variables
@@ -1559,7 +1565,7 @@ function enterExploreMode() {
     // exploreIndexBtn: show only in clean explore (no filter, no selection, no about)
     const exploreIndexBtn = document.getElementById('exploreIndexBtn');
     if (exploreIndexBtn) {
-        const cleanExplore = !isFilterMode && !isWeAreMode && alignedEmojiIndex === null && !isConnectionMode && !isIndexMode;
+        const cleanExplore = !isWeAreMode && alignedEmojiIndex === null && !isConnectionMode && !isIndexMode;
         exploreIndexBtn.style.display = (isMobileDevice() || !cleanExplore) ? 'none' : '';
     }
     if (canvas) canvas.classList.add('images-loaded');
@@ -1580,7 +1586,6 @@ function loadImages() {
     const uniquePaths = [...new Set(imagePaths)];
     totalImages = uniquePaths.length;
     imagesLoaded = 0;
-    imagesLoadedSuccessfully = 0;
     updateLoadingProgressBar();
     
     if (uniquePaths.length === 0) {
@@ -1617,7 +1622,7 @@ function loadImages() {
             console.warn('Loading timed out — forcing grid display');
             allWordsVisible = true;
             allImagesLoaded = true;
-            hideLoadingIndicator();
+            showLoadingChoiceScreen();
         }
     }, MAX_LOADING_SCREEN_WAIT_MS);
 }
@@ -1835,7 +1840,10 @@ function loadImageOnce(path, useThumb, skipProgress) {
     return new Promise((resolve, reject) => {
         const cached = imageCache[path];
         if (useThumb && cached && (cached.thumb || cached.img)) {
-            if (!skipProgress) { imagesLoaded++; updateLoadingProgressBar(); }
+            if (!skipProgress) {
+                if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
+                updateLoadingProgressBar();
+            }
             resolve(cached);
             return;
         }
@@ -1884,8 +1892,7 @@ function loadImageOnce(path, useThumb, skipProgress) {
                 entry.error = false;
 
                 if (!skipProgress) {
-            imagesLoaded++;
-            imagesLoadedSuccessfully++;
+                    if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
                     updateLoadingProgressBar();
                     debugLog('Loaded ' + (useThumb ? 'thumb' : 'full') + ' ' + path);
                 }
@@ -1894,7 +1901,10 @@ function loadImageOnce(path, useThumb, skipProgress) {
                 resolve(entry);
             } catch (err) {
                 console.warn('Image onload error:', path, err);
-                if (!skipProgress) { imagesLoaded++; updateLoadingProgressBar(); }
+                if (!skipProgress) {
+                    if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
+                    updateLoadingProgressBar();
+                }
                 reject(err);
             }
         };
@@ -1902,12 +1912,18 @@ function loadImageOnce(path, useThumb, skipProgress) {
         img.onerror = () => {
             if (useThumb) {
                 loadImageOnce(path, false, skipProgress).then(resolve).catch(() => {
-                    if (!skipProgress) { imagesLoaded++; updateLoadingProgressBar(); }
+                    if (!skipProgress) {
+                        if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
+                        updateLoadingProgressBar();
+                    }
                     reject(new Error('Failed to load image: ' + path));
                 });
                 return;
             }
-            if (!skipProgress) { imagesLoaded++; updateLoadingProgressBar(); }
+            if (!skipProgress) {
+                if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
+                updateLoadingProgressBar();
+            }
             reject(new Error('Failed to load image: ' + path));
         };
 
@@ -2018,7 +2034,7 @@ function generatePoints(count, minDistance) {
                     imagePath: currentImagePath,
                     folderPath: folderPath,
                     emojiIndex: pointIndex + 1,
-                    isAligned: false, isFiltered: false, filteredFolder: null,
+                    isAligned: false,
                     targetX: 0, targetY: 0, currentAlignedX: x, currentAlignedY: y,
                     targetSize: 0, currentSize: 0, opacity: 1.0, targetOpacity: 1.0,
                     alignmentStartTime: 0, startX: x, startY: y, startSize: 0,
@@ -2038,7 +2054,7 @@ function generatePoints(count, minDistance) {
                 x: x, y: y, baseX: x, baseY: y, originalBaseX: x, originalBaseY: y,
                 layer: (pointIndex % 2 === 0) ? 'layer_1' : 'layer_2',
                 imagePath: currentImagePath, folderPath: folderPath, emojiIndex: pointIndex + 1,
-                isAligned: false, isFiltered: false, filteredFolder: null,
+                isAligned: false,
                 targetX: 0, targetY: 0, currentAlignedX: x, currentAlignedY: y,
                 targetSize: 0, currentSize: 0, opacity: 1.0, targetOpacity: 1.0,
                 alignmentStartTime: 0, startX: x, startY: y, startSize: 0,
@@ -2098,7 +2114,7 @@ function handleMouseMove(e) {
             hoveredPoint = null;
             hoverStartTime = 0;
             // Restore opacity if not in any special mode
-            if (alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode) {
+            if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
                 points.forEach(p => {
                     p.targetOpacity = 1.0;
                     p.isHovered = false;
@@ -2111,8 +2127,8 @@ function handleMouseMove(e) {
 
     // Mouse is over canvas
     mouseOverCanvas = true;
-    
-    const rect = canvas.getBoundingClientRect();
+
+    const rect = getCanvasRect();
     const mouseXPos = e.clientX - rect.left;
     const mouseYPos = e.clientY - rect.top;
     
@@ -2169,10 +2185,10 @@ function handleTouchStart(e) {
     }
     
     const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-    const blockSelection = isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isFilterMode && !isConnectionMode;
+    const blockSelection = isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isConnectionMode;
     
     if (e.touches.length > 0) {
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         const touchX = e.touches[0].clientX - rect.left;
         const touchY = e.touches[0].clientY - rect.top;
         lastTouchX = touchX;
@@ -2185,7 +2201,7 @@ function handleTouchStart(e) {
         
         // Mobile-specific: handle two-tap behavior for images (disabled on random grid home)
         // IMPORTANT: Disable selection mode when pinching (zooming with two fingers)
-        if (!blockSelection && isMobile && e.touches.length === 1 && !isFilterMode && !isPinching) {
+        if (!blockSelection && isMobile && e.touches.length === 1 && !isPinching) {
             // Prevent clicks for 2 seconds after home screen loads
             if (mobileInitialLoadTime !== null) {
                 const timeSinceLoad = performance.now() - mobileInitialLoadTime;
@@ -2270,7 +2286,7 @@ function handleTouchStart(e) {
 
     // Two-finger pinch to zoom (smooth, native feel)
     if (e.touches.length === 2) {
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         isPinching = true;
         useContinuousZoom = true;
         // Disable drag while pinching
@@ -2295,10 +2311,10 @@ function handleTouchStart(e) {
 function handleTouchMove(e) {
     markUserInteracted();
     const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-    const blockSelection = isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isFilterMode && !isConnectionMode;
+    const blockSelection = isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isConnectionMode;
     
     if (e.touches.length > 0) {
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         const touchX = e.touches[0].clientX - rect.left;
         const touchY = e.touches[0].clientY - rect.top;
         const now = performance.now();
@@ -2314,7 +2330,7 @@ function handleTouchMove(e) {
                     var newZoom = pinchStartZoom * ratio;
                     var cX = canvas.width / 2;
                     var cY = canvas.height / 2;
-                    var curZ = targetZoomLevel || globalZoomLevel || 1.0;
+                    var curZ = targetZoomLevel ?? globalZoomLevel ?? 1.0;
                     var curPanX = cameraPanX;
                     var curPanY = cameraPanY;
                     newZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
@@ -2427,7 +2443,7 @@ function handleMouseLeave() {
             exitConnectionMode();
         }
         // Restore opacity if not in any special mode
-        if (alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode) {
+        if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
             points.forEach(p => {
                 p.targetOpacity = 1.0;
                 p.isHovered = false;
@@ -2462,35 +2478,19 @@ function handleMouseDown(e) {
     if (timeSinceLastInteraction < CLICK_DELAY_AFTER_INTERACTION) {
         // Still interacting - start dragging instead
         isDragging = true;
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         lastDragX = e.clientX - rect.left;
         lastDragY = e.clientY - rect.top;
         canvas.style.cursor = 'grabbing';
         return;
     }
-    
-    const rect = canvas.getBoundingClientRect();
+
+    const rect = getCanvasRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     
     const clickedPoint = findPointAtMouse(mouseX, mouseY);
-    
-    // Handle clicks in filter mode
-    if (isFilterMode) {
-        if (clickedPoint && clickedPoint.isFiltered) {
-            handleFilteredImageClick(clickedPoint);
-            e.preventDefault();
-            return;
-        } else if (!clickedPoint) {
-            // Allow dragging in filter mode when clicking empty space
-            isDragging = true;
-            lastDragX = mouseX;
-            lastDragY = mouseY;
-            canvas.style.cursor = 'grabbing';
-            return;
-        }
-    }
-    
+
     // When in connection mode, click on empty space (not on connected images) returns to home screen
     if (isConnectionMode && !clickedPoint) {
         exitConnectionMode();
@@ -2624,7 +2624,7 @@ function _preloadBandcampUrls() {
 // Mouse up handler (end drag)
 function handleMouseUp(e) {
     if (_bcClickStartX !== null && e) {
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         const dx = (e.clientX - rect.left) - _bcClickStartX;
         const dy = (e.clientY - rect.top) - _bcClickStartY;
         if (Math.sqrt(dx * dx + dy * dy) < 8) {
@@ -2654,16 +2654,16 @@ function handleWheel(e) {
     // Update last interaction time to prevent accidental clicks
     lastInteractionTime = performance.now();
     
-    const rect = canvas.getBoundingClientRect();
+    const rect = getCanvasRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    
+
     // Store zoom focal point for smooth interpolation in draw loop
     zoomFocalPointX = mouseX;
     zoomFocalPointY = mouseY;
     
-    // If in selection, filter, or connection (dotted line) mode, use smooth gradual zoom/pan at any zoom level
-    if (alignedEmojiIndex !== null || isFilterMode || isConnectionMode) {
+    // If in selection or connection (dotted line) mode, use smooth gradual zoom/pan at any zoom level
+    if (alignedEmojiIndex !== null || isConnectionMode) {
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
 
@@ -2882,9 +2882,9 @@ function findPointAtMouse(mouseX, mouseY) {
         const point = points[i];
         let x, y;
         
-        if (point.isAligned || point.isFiltered) {
-            x = point.isFiltered ? point.currentAlignedX : point.currentAlignedX;
-            y = point.isFiltered ? point.currentAlignedY : point.currentAlignedY;
+        if (point.isAligned) {
+            x = point.currentAlignedX;
+            y = point.currentAlignedY;
         } else {
             // Use layer-specific speed for parallax
             const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
@@ -3090,7 +3090,7 @@ function enterConnectionMode(clickedPoint, isClicked = false, allowMobileAuto = 
     }
     
     // On mobile homepage random grid, keep images inert (no dotted line animation)
-    if (isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isFilterMode && !isConnectionMode && !allowMobileAuto) {
+    if (isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isConnectionMode && !allowMobileAuto) {
         return;
     }
     
@@ -3110,14 +3110,11 @@ function enterConnectionMode(clickedPoint, isClicked = false, allowMobileAuto = 
     // Track if connection mode was entered via click or auto-hover
     isConnectionModeClicked = isClicked;
     
-    // Clear any existing alignment/filter/connection
+    // Clear any existing alignment/connection
     if (alignedEmojiIndex !== null) {
         unalignEmojis();
     }
-    if (isFilterMode) {
-        clearFilter();
-    }
-    
+
     // Get folder path
     let clickedFolderPath = clickedPoint.folderPath;
     if (!clickedFolderPath) {
@@ -3149,8 +3146,7 @@ function enterConnectionMode(clickedPoint, isClicked = false, allowMobileAuto = 
     // Ensure all connected points are NOT aligned (stay at original positions)
     connectedPoints.forEach(p => {
         p.isAligned = false;
-        p.isFiltered = false;
-        // Reset to original positions if they were aligned/filtered
+        // Reset to original positions if they were aligned
         if (p.targetX !== p.originalBaseX || p.targetY !== p.originalBaseY) {
             p.targetX = p.originalBaseX;
             p.targetY = p.originalBaseY;
@@ -3685,22 +3681,18 @@ function filterByTag(tag) {
         if (categoryTitle) categoryTitle.style.display = 'none';
         if (categoryBody) categoryBody.style.display = 'none';
         
+        showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.setProperty('display', 'flex', 'important');
-            mobileBack.style.setProperty('visibility', 'visible', 'important');
-            mobileBack.style.setProperty('opacity', '1', 'important');
-            mobileBack.style.position = 'fixed';
             mobileBack.style.left = '14px';
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
-            mobileBack.style.pointerEvents = 'auto';
             mobileBack.style.zIndex = '20001';
         }
     }
-    
+
     // Show back button
     updateBackButtonVisibility();
     
@@ -3815,18 +3807,14 @@ function showIndexFolderList(folders) {
         setMobileNavVisibility(false);
 
         // Show back button
+        showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.setProperty('display', 'flex', 'important');
-            mobileBack.style.setProperty('visibility', 'visible', 'important');
-            mobileBack.style.setProperty('opacity', '1', 'important');
-            mobileBack.style.position = 'fixed';
             mobileBack.style.left = '14px';
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
-            mobileBack.style.pointerEvents = 'auto';
             mobileBack.style.zIndex = '20001';
         }
     } else {
@@ -3904,23 +3892,19 @@ function selectIndexFolder(folderPath, folderName) {
     // Mobile: show back button directly — do NOT make categoryContent overlay visible
     // (it would intercept all touch events, breaking scroll in selection mode)
     if (isMobileDevice()) {
+        showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.display = 'flex';
-            mobileBack.style.visibility = 'visible';
-            mobileBack.style.opacity = '1';
-            mobileBack.style.position = 'fixed';
             mobileBack.style.left = '14px';
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
             mobileBack.style.backgroundColor = 'transparent';
-            mobileBack.style.pointerEvents = 'auto';
             mobileBack.style.zIndex = '20001';
         }
     }
-    
+
     // Fade out other folder items
     const container = document.getElementById('indexFolderList');
     if (container) {
@@ -4011,19 +3995,15 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
 
     // Mobile: force back button visible/top in selection mode
     if (isMobileDevice()) {
+        showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.display = 'flex';
-            mobileBack.style.visibility = 'visible';
-            mobileBack.style.opacity = '1';
-            mobileBack.style.position = 'fixed';
             mobileBack.style.left = '14px';
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
             mobileBack.style.backgroundColor = 'transparent';
-            mobileBack.style.pointerEvents = 'auto';
             mobileBack.style.zIndex = '20000';
         }
     } else {
@@ -4061,15 +4041,13 @@ function exitIndexMode() {
             contentInner.style.visibility = 'hidden';
             contentInner.style.opacity = '0';
         }
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) mobileBack.style.display = 'none';
+        hideMobileBackButton();
     }
 
     // Restore all images
     points.forEach(p => {
         p.targetOpacity = 1.0;
         p.isInactive = false;
-        p.isFiltered = false;
     });
     
     // Reset camera
@@ -4148,86 +4126,6 @@ function clearFilter() {
         }
         return;
     }
-
-    if (!isFilterMode) return;
-    
-    // Hide project about text
-    hideProjectAboutText();
-    
-    currentFilterTag = null;
-    isFilterMode = false;
-    
-    // Restore all points to original positions
-    filteredImages.forEach(point => {
-        point.isFiltered = false;
-        point.targetX = point.originalBaseX;
-        point.targetY = point.originalBaseY;
-        point.targetSize = point.layer === 'layer_1' ? baseEmojiSize : baseEmojiSize * layer2SizeMultiplier;
-        point.targetOpacity = 1.0;
-        point.startX = point.currentAlignedX;
-        point.startY = point.currentAlignedY;
-        point.startSize = point.currentSize;
-        point.alignmentStartTime = performance.now();
-    });
-    
-    filteredImages = [];
-    
-    // Restore opacity for all images and reset inactive flag
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-        p.isInactive = false; // Reset inactive flag
-    });
-    
-    // Reset camera
-    currentZoomIndex = initialZoomIndex;
-    startZoomTransition();
-    targetCameraPanX = initialCameraPanX;
-    targetCameraPanY = initialCameraPanY;
-    cameraPanX = initialCameraPanX;
-    cameraPanY = initialCameraPanY;
-    
-    updateFilterButtons();
-    updateBackButtonVisibility();
-    // Restore exploreIndexBtn when returning to clean grid
-    if (!isMobileDevice()) {
-        const eib = document.getElementById('exploreIndexBtn');
-        if (eib) eib.style.display = '';
-    }
-}
-
-function handleFilteredImageClick(clickedPoint) {
-    if (!isFilterMode || !clickedPoint.isFiltered) return;
-    
-    const folderPath = clickedPoint.filteredFolder || normalizeFolderPathFromImagePath(clickedPoint.imagePath);
-    const folderPointsF = points.filter((p) => {
-        const pFolder = p.folderPath || normalizeFolderPathFromImagePath(p.imagePath);
-        return pFolder === folderPath;
-    });
-    
-    if (folderPointsF.length === 0 && !imagePaths.some((path) => normalizeFolderPathFromImagePath(path) === folderPath)) return;
-    
-    // Clear current filter and align folder images
-    clearFilter();
-    
-    // Align folder images (desktop horizontal layout; relayouts as images load)
-    selectionFocusPointForPhase2 = clickedPoint; // Phase 2: pan to clicked image
-    alignedEmojiIndex = clickedPoint.imageIndex ?? folderPointsF[0]?.emojiIndex ?? 1;
-    alignedEmojis = mergeFolderImagesWithAllPaths(folderPath, folderPointsF);
-    alignedFolderPath = folderPath;
-    layoutAlignedEmojisDesktop(true);
-    
-    // Set opacity for non-selected images (group by folder)
-    const clickedFolderForAlignment = clickedPoint.folderPath || clickedPoint.imagePath.substring(0, clickedPoint.imagePath.lastIndexOf('/'));
-    points.forEach(p => {
-        const pFolder = p.folderPath || p.imagePath.substring(0, p.imagePath.lastIndexOf('/'));
-        if (pFolder !== clickedFolderForAlignment) {
-            p.targetOpacity = 0.0;
-        } else {
-            p.targetOpacity = 1.0;
-        }
-    });
-    
-    updateBackButtonVisibility();
 }
 
 function updateFilterButtons() {
@@ -4472,7 +4370,6 @@ function draw() {
     const isMobileHome = isMobileVersion &&
         currentMobileCategory === null &&
         alignedEmojiIndex === null &&
-        !isFilterMode &&
         activeTags.size === 0 &&
         !isConnectionMode &&
         !isWeAreMode;
@@ -4664,8 +4561,8 @@ function draw() {
             isZoomTransitioning = false;
             globalZoomLevel = zoomTransitionTargetLevel;
         }
-    } else if (alignedEmojiIndex !== null || isFilterMode || useContinuousZoom || !isZoomTransitioning) {
-        // Smooth gradual zoom interpolation (selection/filter mode, touch pinch zoom, and normal mode with mouse wheel)
+    } else if (alignedEmojiIndex !== null || useContinuousZoom || !isZoomTransitioning) {
+        // Smooth gradual zoom interpolation (selection mode, touch pinch zoom, and normal mode with mouse wheel)
         // Normal mode: when isZoomTransitioning is false, it means we're using smooth zoom from wheel events
         
         // Apply smooth zoom inertia (continue zooming even after wheel stops)
@@ -4852,10 +4749,11 @@ function draw() {
     // Sort points by opacity before drawing: non-selected (low opacity) first, then selected (high opacity)
     // This ensures selected images always appear on top
     // IMPORTANT: For mobile selection mode, ensure random grid (non-aligned) is drawn first, then aligned images
+    const alignedPathSet = new Set((alignedEmojis || []).map(p => p.imagePath));
     const sortedPoints = [...points].sort((a, b) => {
         // Check if points are aligned (in selection mode)
-        const aIsAligned = a.isAligned || (alignedEmojiIndex !== null && alignedEmojis.some(aligned => aligned.imagePath === a.imagePath));
-        const bIsAligned = b.isAligned || (alignedEmojiIndex !== null && alignedEmojis.some(aligned => aligned.imagePath === b.imagePath));
+        const aIsAligned = a.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(a.imagePath));
+        const bIsAligned = b.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(b.imagePath));
         
         // If one is aligned and other is not, draw non-aligned first (random grid behind)
         if (!aIsAligned && bIsAligned) return -1;
@@ -4882,7 +4780,7 @@ function draw() {
         // Use faster fade in when restoring opacity (when mouse leaves)
         let currentOpacitySpeed;
         if (point.targetOpacity === 0.0 && point.isInactive) {
-            if (isMobileVersion && currentMobileCategory && !point.isAligned && !point.isFiltered) {
+            if (isMobileVersion && currentMobileCategory && !point.isAligned) {
                 // Mobile grid fade out: 300ms duration
                 currentOpacitySpeed = MOBILE_GRID_FADE_OUT_SPEED;
             } else if (isIndexMode && selectedIndexFolder === null) {
@@ -4904,7 +4802,7 @@ function draw() {
         }
         
         // Mobile: in selection mode or with category menu open, never draw non-aligned grid (fixes first-time grid staying visible)
-        if (isMobileVersion && !point.isAligned && !point.isFiltered) {
+        if (isMobileVersion && !point.isAligned) {
             if (alignedEmojiIndex !== null) {
                 point.opacity = 0;
                 point.targetOpacity = 0;
@@ -4917,8 +4815,8 @@ function draw() {
             }
         }
         // Skip drawing if opacity effectively 0 (for random grid fade out)
-        if (point.opacity < 0.01 && !point.isAligned && !point.isFiltered) {
-            if (isMobileVersion && alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode && currentMobileCategory === null && !isWeAreMode) {
+        if (point.opacity < 0.01 && !point.isAligned) {
+            if (isMobileVersion && alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode && currentMobileCategory === null && !isWeAreMode) {
                 point.opacity = 1.0;
                 point.targetOpacity = 1.0;
             } else {
@@ -4929,7 +4827,7 @@ function draw() {
         let x, y;
         let imageSize;
         
-        if (point.isAligned || point.isFiltered || (point.alignmentStartTime > 0 && !point.isAligned && !point.isFiltered)) {
+        if (point.isAligned || (point.alignmentStartTime > 0 && !point.isAligned)) {
             // Time-based smooth animation with logarithmic easing (1.2 seconds duration)
             const elapsed = currentTime - point.alignmentStartTime; // Use cached time
             const progress = Math.min(elapsed / alignmentAnimationDuration, 1.0);
@@ -4942,8 +4840,8 @@ function draw() {
             point.currentAlignedY = point.startY + (point.targetY - point.startY) * easeProgress;
             point.currentSize = point.startSize + (point.targetSize - point.startSize) * easeProgress;
             
-            // If aligned or filtered, use target position; otherwise transitioning back
-            if (point.isAligned || point.isFiltered) {
+            // If aligned, use target position; otherwise transitioning back
+            if (point.isAligned) {
                 x = point.currentAlignedX;
                 y = point.currentAlignedY;
                 imageSize = point.currentSize;
@@ -4957,7 +4855,6 @@ function draw() {
                     point.alignmentStartTime = 0;
                     point.currentAlignedX = point.originalBaseX;
                     point.currentAlignedY = point.originalBaseY;
-                    point.isFiltered = false;
                 }
             }
         } else {
@@ -4992,9 +4889,9 @@ function draw() {
                         exitConnectionMode();
                     }
                     
-                    // Restore opacity for all images ONLY if not in selection/filter/connection mode
-                    // In selection/filter/connection mode, opacity should remain as set by selection
-                    if (alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode) {
+                    // Restore opacity for all images ONLY if not in selection/connection mode
+                    // In selection/connection mode, opacity should remain as set by selection
+                    if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
                         points.forEach(p => {
                             p.targetOpacity = 1.0;
                         });
@@ -5013,8 +4910,8 @@ function draw() {
                         hoveredConnectedPoints = points.filter(p => getPointFolder(p) === hoveredFolder);
                         hoveredConnectedPoints.sort((a, b) => a.originalBaseX - b.originalBaseX);
                     }
-                    // Don't apply fade/connection-mode logic if already in selection/filter/connection mode
-                    if (alignedEmojiIndex === null && !isFilterMode && activeTags.size === 0 && !isConnectionMode) {
+                    // Don't apply fade/connection-mode logic if already in selection/connection mode
+                    if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
                         const hoverDuration = currentTime - hoverStartTime;
                         const hoverTimeout = (typeof isMobileDevice === 'function' && isMobileDevice()) ? HOVER_FADE_TIMEOUT : HOVER_FADE_TIMEOUT_WEB;
                         if (hoverDuration >= hoverTimeout) {
@@ -5103,8 +5000,8 @@ function draw() {
 
             // Animated GIF: canvas 2d only ever paints the first frame (HTML spec). Selection/filter uses DOM <img> clones.
             const isGifHtml = shouldKeepHtmlImageForCanvas(point.imagePath) && img.nodeName === 'IMG';
-            const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedEmojis.some((a) => a && a.imagePath === point.imagePath));
-            const useGifDomOverlay = isGifHtml && (isSelectionRowImage || point.isFiltered || selectionAnimationPhase !== 0);
+            const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(point.imagePath));
+            const useGifDomOverlay = isGifHtml && (isSelectionRowImage || selectionAnimationPhase !== 0);
             
             // Infinite carousel: draw aligned images in three positions (left copy, main, right copy)
             const drawOffsets = (point.isAligned && !isMobileDevice() && alignedRowTotalWidthWorld > 0)
@@ -5372,7 +5269,7 @@ function updateBackButtonVisibility() {
     
     // Show back button when: images aligned, in about mode, in connection mode, in index mode, mobile category open
     // (desktop toggle filter no longer uses a back button)
-    if (alignedEmojiIndex !== null || isFilterMode || isWeAreMode || isConnectionMode || isIndexMode || (isMobileVersion && currentMobileCategory !== null)) {
+    if (alignedEmojiIndex !== null || isWeAreMode || isConnectionMode || isIndexMode || (isMobileVersion && currentMobileCategory !== null)) {
         cachedBackButton.style.display = 'flex';
         cachedBackButton.style.visibility = 'visible';
         cachedBackButton.style.opacity = '1';
@@ -5437,6 +5334,8 @@ function handleDeviceOrientation(e) {
 
 // Request device orientation permission and setup handler
 function setupDeviceOrientation() {
+    if (setupDeviceOrientation._initialized) return;
+    setupDeviceOrientation._initialized = true;
     // Only setup on mobile devices
     if (!isMobileDevice()) return;
     
@@ -5518,7 +5417,7 @@ function initMobileHomepageNav() {
             _lStartX = e.touches[0].clientX;
             _lStartY = e.touches[0].clientY;
             _lDragging = false;
-            const rect = canvas.getBoundingClientRect();
+            const rect = getCanvasRect();
             lastTouchX = e.touches[0].clientX - rect.left;
             lastTouchY = e.touches[0].clientY - rect.top;
             lastTouchTime = performance.now();
@@ -5533,7 +5432,7 @@ function initMobileHomepageNav() {
             }
             if (_lDragging) {
                 e.preventDefault();
-                const rect = canvas.getBoundingClientRect();
+                const rect = getCanvasRect();
                 const touchX = e.touches[0].clientX - rect.left;
                 const touchY = e.touches[0].clientY - rect.top;
                 const now = performance.now();
@@ -5581,32 +5480,6 @@ function getMobileNavLayoutSize() {
 function calculateLinesIntersection(labels) {
     const { width, height } = getMobileNavLayoutSize();
     return { x: width / 2, y: height / 2 };
-}
-
-// Calculate intersection point of two line segments
-function lineIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
-    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(denom) < 0.001) {
-        // Lines are parallel, use center of screen as fallback
-        const { width, height } = getViewportSize();
-        return { x: width / 2, y: height / 2 };
-    }
-    
-    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
-    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
-    
-    // Check if intersection is within both line segments
-    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-        return {
-            x: x1 + t * (x2 - x1),
-            y: y1 + t * (y2 - y1)
-        };
-    }
-    
-    // If not within segments, extend lines and find intersection
-    const x = x1 + t * (x2 - x1);
-    const y = y1 + t * (y2 - y1);
-    return { x, y };
 }
 
 // Draw navigation lines from center intersection to labels
@@ -5707,7 +5580,7 @@ function handleMobileCategorySelect(category) {
     
     // Fade out all points (images) in random grid over 0.25s
     points.forEach(point => {
-        if (!point.isAligned && !point.isFiltered) {
+        if (!point.isAligned) {
             point.targetOpacity = 0.0;
         }
     });
@@ -5720,18 +5593,14 @@ function handleMobileCategorySelect(category) {
         if (category === 'we-are') {
             isWeAreMode = true; // Set we are mode flag
             showMobileCategoryContent(category);
+            showMobileBackButton();
             const mobileBack = document.getElementById('mobileCategoryBack');
             if (mobileBack) {
-                mobileBack.style.display = 'flex';
-                mobileBack.style.visibility = 'visible';
-                mobileBack.style.opacity = '1';
-                mobileBack.style.position = 'fixed';
                 mobileBack.style.left = '14px';
                 mobileBack.style.right = '14px';
                 mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
                 mobileBack.style.top = 'auto';
                 mobileBack.style.background = 'transparent';
-                mobileBack.style.pointerEvents = 'auto';
                 mobileBack.style.zIndex = '20000';
             }
             return;
@@ -5758,18 +5627,14 @@ function handleMobileCategorySelect(category) {
             }
             const contentInner = document.querySelector('.mobile-category-content-inner');
             if (contentInner) { contentInner.style.display = 'none'; contentInner.style.visibility = 'hidden'; }
+            showMobileBackButton();
             const mobileBack = document.getElementById('mobileCategoryBack');
             if (mobileBack) {
-                mobileBack.style.setProperty('display', 'flex', 'important');
-                mobileBack.style.setProperty('visibility', 'visible', 'important');
-                mobileBack.style.setProperty('opacity', '1', 'important');
-                mobileBack.style.position = 'fixed';
                 mobileBack.style.left = '14px';
                 mobileBack.style.right = '14px';
                 mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
                 mobileBack.style.top = 'auto';
                 mobileBack.style.background = 'transparent';
-                mobileBack.style.pointerEvents = 'auto';
                 mobileBack.style.zIndex = '20001';
             }
             showIndexFolderList(allFolders);
@@ -5787,15 +5652,11 @@ function handleMobileCategorySelect(category) {
         const tag = category === 'materiality' ? 'concept' : category === 'spatial' ? 'spatial' : category;
         filterByTag(tag);
         // Always show back button for any tag category on mobile (filterByTag may return early if no folders)
+        showMobileBackButton();
         const mobileBackTag = document.getElementById('mobileCategoryBack');
         if (mobileBackTag) {
-            mobileBackTag.style.setProperty('display', 'flex', 'important');
-            mobileBackTag.style.setProperty('visibility', 'visible', 'important');
-            mobileBackTag.style.setProperty('opacity', '1', 'important');
-            mobileBackTag.style.position = 'fixed';
             mobileBackTag.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBackTag.style.top = 'auto';
-            mobileBackTag.style.pointerEvents = 'auto';
             mobileBackTag.style.zIndex = '20001';
         }
         updateBackButtonVisibility();
@@ -5881,9 +5742,7 @@ function showMobileCategoryContent(category) {
         const tag = category;
         filterByTag(tag);
         
-        // Show filtered images info
-        const filteredCount = filteredImages ? filteredImages.length : 0;
-        categoryBody.innerHTML = `<div style="line-height: 1.6; font-size: 14px;">${filteredCount} projects</div>`;
+        categoryBody.innerHTML = `<div style="line-height: 1.6; font-size: 14px;">projects</div>`;
     }
     
     // Show category content with fade in
@@ -5922,19 +5781,15 @@ function handleMobileCategoryBack() {
         // Show navigation again
         setMobileNavVisibility(true);
         
-        // Hide the back button on main screen
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) {
-            mobileBack.style.display = 'none';
-        }
-        
+        hideMobileBackButton();
+
         updateBackButtonVisibility();
         updateMobileGridPointerState();
         startMobileAutoConnections();
         requestAnimationFrame(function () { updateMobileGridPointerState(); });
         return;
     }
-    
+
     // If in image selection mode (aligned images), return to folder list
     if (alignedEmojiIndex !== null && selectedIndexFolder !== null) {
         returnToFolderSelection();
@@ -5975,19 +5830,15 @@ function handleMobileCategoryBack() {
             point.isInactive = false;
         });
         
-        // Hide the back button on main screen
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) {
-            mobileBack.style.display = 'none';
-        }
-        
+        hideMobileBackButton();
+
         updateBackButtonVisibility();
         updateMobileGridPointerState();
         startMobileAutoConnections();
         requestAnimationFrame(function () { updateMobileGridPointerState(); });
         return;
     }
-    
+
     currentMobileCategory = null;
     
     // Reset aligned state and restore originals (instant jump back)
@@ -6014,26 +5865,17 @@ function handleMobileCategoryBack() {
     
     // Fade in all points in random grid
     points.forEach(point => {
-        if (!point.isAligned && !point.isFiltered) {
+        if (!point.isAligned) {
             point.targetOpacity = 1.0;
         }
     });
-    
-    // Clear filter if active
-    if (isFilterMode) {
-        clearFilter();
-    }
-    
+
     updateBackButtonVisibility();
     updateMobileGridPointerState();
     startMobileAutoConnections();
     
-    // Hide the back button on main screen
-    const mobileBack = document.getElementById('mobileCategoryBack');
-    if (mobileBack) {
-        mobileBack.style.display = 'none';
-    }
-    
+    hideMobileBackButton();
+
     // Re-apply canvas pointer-events on next frame so touch/pan works after back
     requestAnimationFrame(function () {
         updateMobileGridPointerState();
@@ -6575,8 +6417,6 @@ function runAppInit() {
                 } else {
                     exitIndexMode();
                 }
-            } else if (isFilterMode) {
-                clearFilter();
             } else if (isConnectionMode) {
                 exitConnectionMode();
             } else {
@@ -7335,6 +7175,7 @@ window.addEventListener('resize', () => {
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     resizeRaf = requestAnimationFrame(() => {
         resizeRaf = 0;
+    canvasBoundingRect = null;
     resizeCanvas();
         // Invalidate mobile detection cache on resize
         if (draw._isMobileCached !== undefined) {
@@ -7351,4 +7192,9 @@ window.addEventListener('resize', () => {
     smoothMouseX = targetMouseX;
     smoothMouseY = targetMouseY;
     });
+});
+
+window.addEventListener('orientationchange', () => {
+    draw._isMobileCached = undefined;
+    canvasBoundingRect = null;
 });
