@@ -1065,6 +1065,44 @@ body {
     word-break: break-word;
 }
 
+/* Linkified URLs inside more.txt — both gallery panel and canvas overlay */
+.more-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    opacity: 0.85;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: opacity 0.2s ease-out;
+    white-space: nowrap;
+}
+.more-link:hover {
+    opacity: 1;
+}
+.more-link-bandcamp {
+    color: #1da0c3;
+    border-bottom-color: #1da0c3;
+    opacity: 1;
+}
+.more-link-bandcamp:hover {
+    opacity: 0.75;
+}
+
+.bandcamp-embed-wrap {
+    margin-top: 10px;
+    width: 100%;
+}
+.bandcamp-embed-wrap iframe,
+.bandcamp-embed-line iframe {
+    display: block;
+    width: 100%;
+    border: none;
+    background: #000;
+}
+.bandcamp-embed-line {
+    margin-top: 8px;
+}
+
 /* Right panel: random image canvas */
 .gallery-image-area {
     flex: 1;

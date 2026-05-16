@@ -27,7 +27,7 @@ function getWebImagePaths(dir, baseDir) {
       results.push(...getWebImagePaths(full, baseDir));
     } else {
       const ext = path.extname(e.name).toLowerCase();
-      if (WEB_IMAGE_EXT.includes(ext)) {
+      if (WEB_IMAGE_EXT.includes(ext) && !e.name.endsWith('_poster.jpg')) {
         const relative = path.relative(baseDir, full);
         const normalized = relative.split(path.sep).join('/');
         results.push(normalized);

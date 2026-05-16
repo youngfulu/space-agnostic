@@ -1185,6 +1185,9 @@ const imagePaths = [
     'Ergamo/16fps_00020.png',
     'Ergamo/30fps_final_00001.png',
     'Ergamo/AnimateDiff_00004.png',
+    'Ergamo/AnimateDiff_00009 copy.gif',
+    'Ergamo/AnimateDiff_00009.gif',
+    'Ergamo/Screen Recording 2025-04-28 at 02.06.12.gif',
     'Flora/Screenshot 2026-04-07 at 17.17.55.png',
     'Flora/photo_2021-07-25_01-23-59.jpg',
     'Ghosted/Ghosted.gif',
@@ -1216,6 +1219,8 @@ const imagePaths = [
     'Psyche/Screenshot 2024-07-27 at 15.56.50.png',
     'Psyche/pasted-image.png',
     'Screenshot 2023-07-11 at 23.47.11_result.png',
+    'Seen/LTX-2_00005_.gif',
+    'Seen/LTX-2_00015_.gif',
     'Seen/Screenshot 2026-02-03 at 16.28.31.png',
     'Seen/TDMovieOut.1.png',
     'Seen/fin front.png',
@@ -1252,14 +1257,16 @@ const imagePaths = [
     'Spectral veawings/carpet28_result.jpg',
     'Spectral veawings/carpet29.jpg',
     'Spectral veawings/carpet29_result.jpg',
+    'Thresholds/IMG_0302.jpg',
+    'Thresholds/IMG_0319.jpg',
+    'Thresholds/ScreenRecording_04-09-2026 13-16-47_1.gif',
     'Thresholds/Screenshot 2024-11-24 at 22.18.45.png',
     'Thresholds/Screenshot 2024-11-24 at 22.21.12.png',
     'Thresholds/liminal8.png',
     'Thresholds/pasted-image.png',
     'Thresholds/textured_3_1kMhVqro.jpg',
-    'Thresholds/textured_4_1kMhVqro.jpg',
-    'Thresholds/textured_5_1kMhVqro.jpg',
     'Thresholds/textured_9_1kMhVqro.jpg',
+    'Your eyes /camvideo_33020e20.gif',
     'Your eyes /photo_2019-07-25_15-19-42.jpg',
     'Your eyes /photo_2019-07-25_15-40-52.jpg',
     'Zatmenie 1/Screen Shot 2019-01-07 at 00.25.33.png',
@@ -1292,26 +1299,32 @@ const imagePaths = [
     'extractive memories/2023-08-28--20-20-00_poster.jpg',
     'extractive memories/2023-11-19--13-29-55.gif',
     'extractive memories/2023-11-19--13-29-55_poster.jpg',
+    'extractive memories/2023-11-27--19-13-04.gif',
     'extractive memories/2023-11-27--19-13-04_poster.jpg',
     'extractive memories/2023-11-27--20-11-28.gif',
     'extractive memories/2023-11-27--20-11-28_poster.jpg',
     'extractive memories/2023-11-29--01-01-18.gif',
     'extractive memories/2023-11-29--01-01-18_poster.jpg',
+    'extractive memories/2023-12-06--16-57-24.gif',
     'extractive memories/2023-12-06--16-57-24_poster.jpg',
+    'extractive memories/2023-12-06--16-58-42-2.gif',
     'extractive memories/2023-12-06--16-58-42-2_poster.jpg',
     'extractive memories/2023-12-06--18-07-53.gif',
     'extractive memories/2023-12-06--18-07-53_poster.jpg',
+    'extractive memories/2023-12-06--18-55-00.gif',
     'extractive memories/2023-12-06--18-55-00_poster.jpg',
     'extractive memories/Screenshot 2024-10-13 at 03.18.05.png',
     'extractive memories/exm_ — slide 01.jpg',
     'extractive memories/exm_ — slide 02.jpg',
     'extractive memories/exm_ — slide 05.jpg',
     'extractive memories/exm_ — slide 06.jpg',
+    'extractive memories/nobodyfeelingtears_.gif',
     'extractive memories/nobodyfeelingtears__poster.jpg',
     'iced/gula vis.jpg',
     'iced/iced.jpg',
     'iced/iced3.jpg',
     'iced/iced5.jpg',
+    'sculpture/IMG_9102.jpg',
     'sculpture/Screenshot 2022-02-16 at 13.16.32.png',
     'waevaev/a2471434847_1x1_700.jpg',
     'waevaev/a3791641340_1x1_700.jpg',
@@ -1319,7 +1332,8 @@ const imagePaths = [
     'walker/5.jpg',
     'walker/6.1.jpg',
     'walker/prev-1.jpg',
-    'walker/prev-2.png'
+    'walker/prev-2.png',
+    'walker/walker_master.gif'
 ];
 
 // Image cache: thumb = grid (small), img = full-res (selection mode). Draw uses img || thumb.
@@ -5280,8 +5294,8 @@ function initMobileHomepageNav() {
     
     const mobileNav = document.getElementById('mobileHomepageNav');
     const navLines = document.getElementById('mobileNavLines');
-    const navLabels = document.querySelectorAll('.mobile-nav-label');
-    
+    const navLabels = mobileNav ? mobileNav.querySelectorAll('.mobile-nav-label') : [];
+
     if (!mobileNav || !navLines || navLabels.length === 0) {
         return;
     }
@@ -5320,9 +5334,17 @@ function initMobileHomepageNav() {
     }
 }
 
-// Intersection for nav lines: center of viewport to stabilize layout across devices
+/** Layout viewport center for nav lines (match fixed labels + SVG; visualViewport differs on mobile and caused an extra/misaligned spoke). */
+function getMobileNavLayoutSize() {
+    return {
+        width: window.innerWidth || document.documentElement.clientWidth || 0,
+        height: window.innerHeight || document.documentElement.clientHeight || 0,
+    };
+}
+
+// Intersection for nav lines: center of layout viewport (not visualViewport — avoids stray line to “text” area)
 function calculateLinesIntersection(labels) {
-    const { width, height } = getViewportSize();
+    const { width, height } = getMobileNavLayoutSize();
     return { x: width / 2, y: height / 2 };
 }
 
@@ -5355,14 +5377,14 @@ function lineIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
 // Draw navigation lines from center intersection to labels
 function drawMobileNavLines(svg, labels) {
     const svgNS = 'http://www.w3.org/2000/svg';
-    const { width: vpW, height: vpH } = getViewportSize();
-    
+    const { width: vpW, height: vpH } = getMobileNavLayoutSize();
+
     // Clear existing lines
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${vpW} ${vpH}`);
     svg.setAttribute('width', vpW);
     svg.setAttribute('height', vpH);
-    
+
     // Calculate intersection point of lines connecting the 4 labels
     const intersection = calculateLinesIntersection(labels);
     const centerX = intersection ? intersection.x : vpW / 2;
@@ -5397,6 +5419,12 @@ function drawMobileNavLines(svg, labels) {
         const labelY = rect.top + rect.height / 2;
         
         // Create line from intersection to label
+        const dx = labelX - centerX;
+        const dy = labelY - centerY;
+        if (dx * dx + dy * dy < 64 * 64) {
+            return;
+        }
+
         const line = document.createElementNS(svgNS, 'line');
         line.setAttribute('x1', centerX);
         line.setAttribute('y1', centerY);
@@ -5405,7 +5433,7 @@ function drawMobileNavLines(svg, labels) {
         line.setAttribute('stroke', '#fff');
         line.setAttribute('stroke-width', '0.5');
         line.setAttribute('opacity', '0.75'); // +25% vs 0.6 (mobile home only)
-        
+
         svg.appendChild(line);
     });
 }
@@ -5869,8 +5897,9 @@ function runAppInit() {
             if (resizeRaf) cancelAnimationFrame(resizeRaf);
             resizeRaf = requestAnimationFrame(() => {
                 resizeRaf = 0;
+                const mobileNavEl = document.getElementById('mobileHomepageNav');
                 const navLines = document.getElementById('mobileNavLines');
-                const navLabels = document.querySelectorAll('.mobile-nav-label');
+                const navLabels = mobileNavEl ? mobileNavEl.querySelectorAll('.mobile-nav-label') : [];
                 if (navLines && navLabels.length > 0 && isMobileVersion) {
                     drawMobileNavLines(navLines, navLabels);
                 }

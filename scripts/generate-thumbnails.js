@@ -68,6 +68,11 @@ async function main() {
   let done = 0;
   let errors = 0;
   for (const filePath of files) {
+    // Files can disappear during iteration if Artsy is being edited concurrently.
+    if (!fs.existsSync(filePath)) {
+      errors++;
+      continue;
+    }
     const rel = path.relative(imageDir, filePath);
     const thumbPath = path.join(thumbBase, rel);
     const thumbDir = path.dirname(thumbPath);

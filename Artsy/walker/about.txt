@@ -1,7 +1,9 @@
-name: ()
+name: (Walkers)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: ( extended animation )
+year: (2019)
+Contributor: Alinna Tikhonova 
+
+
+
 

@@ -1,7 +1,11 @@
-name: ()
-#
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Title: • smoke like • teaser
+Type: Video
+Date: January 19, 2023
+URL: https://www.instagram.com/p/CnmbqtBA_Ma/
+Likes: 62
+Views: 532
+Duration: 0:38 (38.4s)
+Product type: clips
 
+Files:
+  CnmbqtBA_Ma.mp4

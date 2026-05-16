@@ -1,0 +1,7 @@
+name: Broken Karaoke
+#
+Project type: music
+Year: 2024
+Location: France
+Tags: experimental · ambient · drone · electro-acoustic
+

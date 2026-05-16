@@ -6365,7 +6365,10 @@ function _loadGalleryText(proj) {
         .then(text => {
             const moreEl = document.getElementById('galleryMoreText');
             if (moreEl && text && text.trim()) {
-                moreEl.textContent = text.trim().toLowerCase();
+                moreEl.innerHTML = '';
+                text.trim().split(/\r?\n/).forEach(line => {
+                    moreEl.appendChild(makeMoreLineElement(line.toLowerCase()));
+                });
                 moreEl.style.display = '';
             } else if (moreEl) {
                 moreEl.style.display = 'none';
@@ -6881,6 +6884,109 @@ function parseAndDisplayAboutText(text, moreText) {
     displayProjectAboutText(name, aboutLines, moreText || null);
 }
 
+// Build a .more-line div from a text line — URLs become clickable <a> elements.
+// Strips leading >>> markers from URL-only lines.
+// Fetch Bandcamp oEmbed via JSONP (bypasses CORS; Bandcamp supports format=js&callback=).
+// Returns { src, height } for the iframe player, or null on failure.
+function fetchBandcampEmbedSrc(url) {
+    return new Promise(resolve => {
+        const cbName = '__bcOembed_' + Math.random().toString(36).slice(2);
+        let script;
+        const cleanup = () => {
+            delete window[cbName];
+            if (script && script.parentNode) script.parentNode.removeChild(script);
+        };
+        const timer = setTimeout(() => { cleanup(); resolve(null); }, 6000);
+
+        window[cbName] = (data) => {
+            clearTimeout(timer);
+            cleanup();
+            if (!data || !data.html) return resolve(null);
+            const srcMatch = data.html.match(/src="([^"]+)"/);
+            if (!srcMatch) return resolve(null);
+            let src = srcMatch[1];
+            // Force dark theme colours
+            src = src.replace(/bgcol=[a-fA-F0-9]+/, 'bgcol=000000')
+                      .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8');
+            if (!src.includes('transparent=')) src = src.replace(/\/?$/, '/') + 'transparent=true/';
+            resolve({ src, height: data.height || 120 });
+        };
+
+        script = document.createElement('script');
+        script.onerror = () => { clearTimeout(timer); cleanup(); resolve(null); };
+        script.src = 'https://bandcamp.com/api/oembed?url=' + encodeURIComponent(url) +
+                     '&format=js&callback=' + cbName;
+        document.head.appendChild(script);
+    });
+}
+
+function makeBandcampIframe(src, height) {
+    // Re-skin to dark theme, keep all other params
+    src = src.replace(/bgcol=[a-fA-F0-9]+/, 'bgcol=000000')
+             .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8');
+    if (!src.includes('transparent=')) src = src.replace(/\/?$/, '/') + 'transparent=true/';
+    const iframe = document.createElement('iframe');
+    iframe.src = src;
+    iframe.style.height = height + 'px';
+    iframe.setAttribute('seamless', '');
+    iframe.setAttribute('loading', 'lazy');
+    return iframe;
+}
+
+function makeMoreLineElement(lineText) {
+    const el = document.createElement('div');
+    el.className = 'more-line';
+
+    // 1. Bandcamp <iframe> embed code pasted directly — extract src and re-skin
+    const iframeMatch = lineText.match(/<iframe[^>]+src="(https:\/\/bandcamp\.com\/EmbeddedPlayer\/[^"]+)"[^>]*>/i);
+    if (iframeMatch) {
+        const heightMatch = lineText.match(/height="(\d+)"/i);
+        el.appendChild(makeBandcampIframe(iframeMatch[1], heightMatch ? +heightMatch[1] : 120));
+        el.classList.add('bandcamp-embed-line');
+        return el;
+    }
+
+    const urlRe = /https?:\/\/[^\s]+/;
+    const m = lineText.match(urlRe);
+    if (m) {
+        const url = m[0].replace(/[.,;:!)]+$/, ''); // strip trailing punctuation
+        const prefix = lineText.slice(0, m.index).replace(/^[>\s.]+/, '').trimEnd();
+        if (prefix) el.appendChild(document.createTextNode(prefix + ' '));
+
+        const isBandcamp = url.includes('bandcamp.com');
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.className = 'more-link' + (isBandcamp ? ' more-link-bandcamp' : '');
+        if (isBandcamp) {
+            a.textContent = 'bandcamp ↗';
+        } else {
+            try { a.textContent = new URL(url).hostname.replace('www.', '') + ' ↗'; }
+            catch { a.textContent = url; }
+        }
+        el.appendChild(a);
+
+        // 2. Regular bandcamp.com URL — try JSONP oEmbed for a player
+        if (isBandcamp) {
+            const embedWrap = document.createElement('div');
+            embedWrap.className = 'bandcamp-embed-wrap';
+            el.appendChild(embedWrap);
+            fetchBandcampEmbedSrc(url).then(result => {
+                if (!result) return;
+                embedWrap.appendChild(makeBandcampIframe(result.src, result.height));
+            });
+        }
+
+        const suffix = lineText.slice(m.index + m[0].length).trim();
+        if (suffix) el.appendChild(document.createTextNode(' ' + suffix));
+    } else {
+        el.textContent = lineText.trim();
+    }
+    return el;
+}
+
 // Display project about text (desktop and mobile); more.txt in red zone (right of info, same font/size)
 // Fade-in: line by line (name -> info lines -> more)
 function displayProjectAboutText(name, aboutLines, moreContent) {
@@ -6916,9 +7022,7 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
             // more.txt: line-by-line fade-in (same as about.txt)
             const moreLines = moreContent.trim().split(/\r?\n/).filter(l => l.trim());
             moreLines.forEach((line, idx) => {
-                const lineEl = document.createElement('div');
-                lineEl.className = 'more-line';
-                lineEl.textContent = line.trim();
+                const lineEl = makeMoreLineElement(line.trim());
                 lineEl.style.opacity = '0';
                 lineEl.style.transition = aboutTransition;
                 moreEl.appendChild(lineEl);

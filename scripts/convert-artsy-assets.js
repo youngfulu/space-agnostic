@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
- * Convert non-web raster assets under Artsy/ to web-friendly formats and remove sources.
- * - PDF → JPEG slides (see export_pdf_to_jpeg.py; if slides already exist, PDF is removed only).
- * - HEIC/HEIF/TIFF/BMP → JPEG (same basename).
- * - MP4/MOV/M4V/WEBM/AVI/MKV → if a GIF with the same basename exists, video is deleted only;
- *   otherwise `{basename}.gif` via ffmpeg (fps 8, max width 480, palette; first ARTSY_GIF_MAX_SEC
- *   seconds only, default 20). If ffmpeg fails (e.g. odd containers), macOS: one still via
- *   AVFoundation then a short looping GIF.
- * - AVIF: no conversion (already web); ensure pipelines list it.
+ * Convert non-web assets under Artsy/ to web-friendly formats alongside originals (no deletion by default).
+ * - PDF → JPEG slides (export_pdf_to_jpeg.py); if slides already exist, skip. Original PDF is kept unless
+ *   ARTSY_DELETE_SOURCES=1.
+ * - HEIC/HEIF/TIFF/BMP → JPEG same basename (EXIF orient only via sharp / ffmpeg — no resize or crop).
+ * - MP4/MOV/M4V/WEBM/AVI/MKV → companion `{basename}.gif` if missing (moderate web GIF: tune ARTSY_GIF_*).
+ *   Videos kept unless ARTSY_DELETE_VIDEOS=1.
+ * - Set ARTSY_OVERWRITE=1 to replace existing JPEG/GIF outputs. Default skips when output already exists.
+ * - Set ARTSY_DELETE_SOURCES=1 to remove originals after successful conversion (off by default).
+ * - One encode at a time; ARTSY_COOLDOWN_MS between jobs (default 500).
+ * - ARTSY_ONLY=relative/path/under/Artsy to limit scope.
+ * - AVIF: unchanged (already web).
  * Skips: thumb/, 2prcss/, .txt, dotfiles.
  *
  * Requires: ffmpeg/ffprobe in PATH, Python venv with PyMuPDF (auto-created in .venv-pdf).
@@ -27,6 +30,7 @@ const VENV = path.join(projectRoot, '.venv-pdf');
 const VENV_PY = path.join(VENV, process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3');
 const PDF_SCRIPT = path.join(__dirname, 'export_pdf_to_jpeg.py');
 const SWIFT_FRAME = path.join(__dirname, 'extract_video_frame_mac.swift');
+const SWIFT_TRANSCODE = path.join(__dirname, 'transcode_video_mac.swift');
 
 const SKIP_DIRS = new Set(['thumb', '2prcss']);
 
@@ -64,6 +68,18 @@ function gifSameStemExists(dir, videoStem) {
   }
 }
 
+function shouldDeleteVideos() {
+  return String(process.env.ARTSY_DELETE_VIDEOS || '').trim() === '1';
+}
+
+function shouldDeleteSources() {
+  return String(process.env.ARTSY_DELETE_SOURCES || '').trim() === '1';
+}
+
+function shouldOverwrite() {
+  return String(process.env.ARTSY_OVERWRITE || '').trim() === '1';
+}
+
 function ensurePdfVenv() {
   if (fs.existsSync(VENV_PY)) return;
   console.log('Creating .venv-pdf + PyMuPDF…');
@@ -83,6 +99,46 @@ function tmpJpgFile() {
   return path.join(os.tmpdir(), `artsy-${crypto.randomBytes(8).toString('hex')}.jpg`);
 }
 
+function envNum(name, def) {
+  const v = Number(process.env[name]);
+  return Number.isFinite(v) && v > 0 ? v : def;
+}
+
+const COOLDOWN_RAW = process.env.ARTSY_COOLDOWN_MS;
+const COOLDOWN_MS =
+  COOLDOWN_RAW === undefined || COOLDOWN_RAW === ''
+    ? 500
+    : Math.max(0, Number(COOLDOWN_RAW) || 0);
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function gentleCooldown() {
+  if (COOLDOWN_MS > 0) await sleep(COOLDOWN_MS);
+}
+
+/** Single-threaded, quiet ffmpeg (easier on RAM/GPU when many clips). */
+function ffmpegGlobalArgs() {
+  return ['-hide_banner', '-loglevel', 'error', '-threads', '1'];
+}
+
+/** GIF from video: moderate size/quality for web (override with ARTSY_GIF_*). */
+function gifPaletteFilterForVideo() {
+  const w = envNum('ARTSY_GIF_MAX_WIDTH', 720);
+  const fps = envNum('ARTSY_GIF_FPS', 8);
+  const colors = Math.min(256, Math.max(32, envNum('ARTSY_GIF_COLORS', 200)));
+  return `fps=${fps},scale=${w}:-2:flags=lanczos:force_divisible_by=2,split[s0][s1];[s0]palettegen=max_colors=${colors}:reserve_transparent=0:stats_mode=single[p];[s1][p]paletteuse=dither=bayer:bayer_scale=2`;
+}
+
+/** Single-frame sources (poster / still grab). */
+function gifPaletteFilterForStill() {
+  const w = envNum('ARTSY_GIF_MAX_WIDTH', 720);
+  const defStill = envNum('ARTSY_GIF_STILL_COLORS', 200);
+  const colors = Math.min(256, Math.max(32, defStill));
+  return `scale=${w}:-2:flags=lanczos:force_divisible_by=2,split[s0][s1];[s0]palettegen=max_colors=${colors}:reserve_transparent=0:stats_mode=single[p];[s1][p]paletteuse=dither=bayer:bayer_scale=2`;
+}
+
 function ffprobeDuration(file) {
   const tryProbe = (extraBeforeFile) =>
     execFileSync(
@@ -91,9 +147,9 @@ function ffprobeDuration(file) {
         '-v',
         'error',
         '-analyzeduration',
-        '100M',
+        '10M',
         '-probesize',
-        '100M',
+        '10M',
         ...extraBeforeFile,
         '-show_entries',
         'format=duration',
@@ -113,20 +169,44 @@ function ffprobeDuration(file) {
   return Number.isFinite(d) && d > 0 ? d : null;
 }
 
-/** Web-oriented GIF: limited length, 480px wide, palette. */
+/** Web-oriented GIF: one job, limited length, small palette (see ARTSY_GIF_*). */
 function ffmpegVideoToGif(videoPath, outGif) {
-  const maxSec = Number(process.env.ARTSY_GIF_MAX_SEC || 20);
+  const maxSec = envNum('ARTSY_GIF_MAX_SEC', 15);
   const dur = ffprobeDuration(videoPath);
   const tOut = dur != null && dur > 0 ? Math.min(dur, maxSec) : maxSec;
-  const args = ['-y', '-i', videoPath, '-t', String(tOut)];
-  args.push(
+  const args = [
+    ...ffmpegGlobalArgs(),
+    '-y',
+    '-i',
+    videoPath,
+    '-t',
+    String(tOut),
     '-lavfi',
-    'fps=8,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen=reserve_transparent=0:stats_mode=single[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3',
+    gifPaletteFilterForVideo(),
     '-loop',
     '0',
     outGif,
-  );
-  execFileSync('ffmpeg', args, { stdio: 'pipe' });
+  ];
+  execFileSync('ffmpeg', args, { stdio: 'pipe', maxBuffer: 8 * 1024 * 1024 });
+}
+
+function tmpMp4File() {
+  return path.join(os.tmpdir(), `artsy-${crypto.randomBytes(8).toString('hex')}.mp4`);
+}
+
+function tryTranscodeWithAvfoundationMac(videoPath, maxSec) {
+  if (process.platform !== 'darwin') return null;
+  if (!fs.existsSync(SWIFT_TRANSCODE)) return null;
+  const tmp = tmpMp4File();
+  try {
+    execFileSync('swift', [SWIFT_TRANSCODE, videoPath, tmp, String(maxSec)], { stdio: 'pipe' });
+    return fs.existsSync(tmp) ? tmp : null;
+  } catch (e) {
+    try {
+      if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+    } catch (_) {}
+    return null;
+  }
 }
 
 /** macOS fallback: one frame → short looping GIF when ffmpeg cannot decode video. */
@@ -137,20 +217,19 @@ function staticGifFromStillMac(videoPath, outGif) {
     execFileSync(
       'ffmpeg',
       [
+        ...ffmpegGlobalArgs(),
         '-y',
-        '-loop',
-        '1',
         '-i',
         tmp,
-        '-t',
-        '2',
+        '-frames:v',
+        '1',
         '-lavfi',
-        'scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
+        gifPaletteFilterForStill(),
         '-loop',
         '0',
         outGif,
       ],
-      { stdio: 'pipe' },
+      { stdio: 'pipe', maxBuffer: 8 * 1024 * 1024 },
     );
   } finally {
     if (fs.existsSync(tmp)) {
@@ -161,14 +240,35 @@ function staticGifFromStillMac(videoPath, outGif) {
   }
 }
 
+/** Still-frame GIF from an existing poster JPG (small, web-safe). */
+function gifFromPosterJpg(posterJpg, outGif) {
+  execFileSync(
+    'ffmpeg',
+    [
+      ...ffmpegGlobalArgs(),
+      '-y',
+      '-i',
+      posterJpg,
+      '-frames:v',
+      '1',
+      '-lavfi',
+      gifPaletteFilterForStill(),
+      '-loop',
+      '0',
+      outGif,
+    ],
+    { stdio: 'pipe', maxBuffer: 8 * 1024 * 1024 },
+  );
+}
+
 /** HEIC / HEIF via ffmpeg (libvips often lacks newer HEIC codecs). */
 function ffmpegHeicToJpg(heicPath, outJpg) {
   const tmp = tmpJpgFile();
   try {
     execFileSync(
       'ffmpeg',
-      ['-y', '-i', heicPath, '-frames:v', '1', '-q:v', '2', tmp],
-      { stdio: 'pipe' },
+      [...ffmpegGlobalArgs(), '-y', '-i', heicPath, '-frames:v', '1', '-q:v', '1', tmp],
+      { stdio: 'pipe', maxBuffer: 8 * 1024 * 1024 },
     );
     if (fs.existsSync(outJpg)) fs.unlinkSync(outJpg);
     fs.renameSync(tmp, outJpg);
@@ -190,7 +290,29 @@ async function main() {
     process.exit(1);
   }
 
-  const files = walkFiles(ARTSY);
+  let files = walkFiles(ARTSY);
+  // Safety guard: do not batch-convert Artsy unless explicitly requested.
+  // Default behavior is "single target only" via ARTSY_ONLY.
+  const allowAll = String(process.env.ARTSY_ALLOW_ALL || '').trim() === '1';
+  const only = String(process.env.ARTSY_ONLY || '').trim().replace(/^\/+/, '');
+  if (!allowAll && !only) {
+    console.error(
+      [
+        'Refusing to convert the whole Artsy/ tree by default.',
+        'Set ARTSY_ONLY=relative/path/under/Artsy to convert a single folder/file,',
+        'or set ARTSY_ALLOW_ALL=1 if you REALLY intend to convert everything.',
+      ].join('\n'),
+    );
+    process.exit(2);
+  }
+  if (only) {
+    const prefix = only;
+    files = files.filter((f) => {
+      const rel = path.relative(ARTSY, f);
+      return rel === prefix || rel.startsWith(prefix + path.sep);
+    });
+    console.log(`ARTSY_ONLY=${prefix} → ${files.length} files\n`);
+  }
   const byExt = (exts) => files.filter((f) => exts.includes(path.extname(f).toLowerCase()));
 
   const pdfs = byExt(['.pdf']);
@@ -201,20 +323,33 @@ async function main() {
 
   for (const hp of heics) {
     const out = path.join(path.dirname(hp), `${stem(hp)}.jpg`);
+    if (fs.existsSync(out) && path.resolve(hp) !== path.resolve(out) && !shouldOverwrite()) {
+      console.log('[heic skip, jpg exists]', path.relative(ARTSY, hp));
+      await gentleCooldown();
+      continue;
+    }
     try {
       console.log('[heic → jpg ffmpeg]', path.relative(ARTSY, hp));
       ffmpegHeicToJpg(hp, out);
-      if (path.resolve(hp) !== path.resolve(out)) fs.unlinkSync(hp);
+      if (shouldDeleteSources() && path.resolve(hp) !== path.resolve(out)) fs.unlinkSync(hp);
+      await gentleCooldown();
     } catch (e) {
       console.log('  ffmpeg HEIC failed, try sharp…', e.message);
       try {
-        if (fs.existsSync(out)) fs.unlinkSync(out);
+        if (fs.existsSync(out) && path.resolve(hp) !== path.resolve(out)) {
+          if (!shouldOverwrite()) {
+            await gentleCooldown();
+            continue;
+          }
+          fs.unlinkSync(out);
+        }
         await sharpMod(hp, { sequentialRead: true, limitInputPixels: false })
           .rotate()
-          .jpeg({ quality: 90, mozjpeg: true, chromaSubsampling: '4:4:4' })
+          .jpeg({ quality: 93, mozjpeg: true, chromaSubsampling: '4:4:4' })
           .toFile(out + '.tmp');
         fs.renameSync(out + '.tmp', out);
-        if (path.resolve(hp) !== path.resolve(out)) fs.unlinkSync(hp);
+        if (shouldDeleteSources() && path.resolve(hp) !== path.resolve(out)) fs.unlinkSync(hp);
+        await gentleCooldown();
       } catch (e2) {
         try {
           if (fs.existsSync(out + '.tmp')) fs.unlinkSync(out + '.tmp');
@@ -229,30 +364,38 @@ async function main() {
     const base = stem(pdfPath);
     try {
       if (pdfSlidesAlreadyExist(dir, base)) {
-        fs.unlinkSync(pdfPath);
-        console.log('[pdf remove, slides exist]', path.relative(ARTSY, pdfPath));
+        console.log('[pdf skip, slides already exported]', path.relative(ARTSY, pdfPath));
+        await gentleCooldown();
         continue;
       }
       console.log('[pdf → jpg slides]', path.relative(ARTSY, pdfPath));
       runPdfExport(pdfPath);
-      fs.unlinkSync(pdfPath);
+      if (shouldDeleteSources()) fs.unlinkSync(pdfPath);
+      await gentleCooldown();
     } catch (e) {
       console.error('  ✗', pdfPath, e.message);
+      await gentleCooldown();
     }
   }
 
   for (const p of [...tiffs, ...bmps]) {
     const ext = path.extname(p);
     const out = path.join(path.dirname(p), `${stem(p)}.jpg`);
+    if (fs.existsSync(out) && path.resolve(out) !== path.resolve(p) && !shouldOverwrite()) {
+      console.log(`[${ext} skip, jpg exists]`, path.relative(ARTSY, p));
+      await gentleCooldown();
+      continue;
+    }
     try {
       console.log(`[${ext} → jpg]`, path.relative(ARTSY, p));
-      if (fs.existsSync(out) && path.resolve(out) !== path.resolve(p)) fs.unlinkSync(out);
+      if (fs.existsSync(out) && path.resolve(out) !== path.resolve(p) && shouldOverwrite()) fs.unlinkSync(out);
       await sharpMod(p, { sequentialRead: true, limitInputPixels: false })
         .rotate()
-        .jpeg({ quality: 90, mozjpeg: true, chromaSubsampling: '4:4:4' })
+        .jpeg({ quality: 93, mozjpeg: true, chromaSubsampling: '4:4:4' })
         .toFile(out + '.tmp');
       fs.renameSync(out + '.tmp', out);
-      if (path.resolve(p) !== path.resolve(out)) fs.unlinkSync(p);
+      if (shouldDeleteSources() && path.resolve(p) !== path.resolve(out)) fs.unlinkSync(p);
+      await gentleCooldown();
     } catch (e) {
       try {
         if (fs.existsSync(out + '.tmp')) fs.unlinkSync(out + '.tmp');
@@ -265,30 +408,78 @@ async function main() {
     const dir = path.dirname(vp);
     const s = stem(vp);
     try {
-      if (gifSameStemExists(dir, s)) {
-        fs.unlinkSync(vp);
-        console.log('[video remove, gif exists]', path.relative(ARTSY, vp));
+      const outGif = path.join(dir, `${s}.gif`);
+      if (gifSameStemExists(dir, s) && !shouldOverwrite()) {
+        console.log('[video keep, gif exists]', path.relative(ARTSY, vp));
+        await gentleCooldown();
         continue;
       }
-      const outGif = path.join(dir, `${s}.gif`);
+      if (gifSameStemExists(dir, s) && shouldOverwrite() && fs.existsSync(outGif)) {
+        fs.unlinkSync(outGif);
+      }
       console.log('[video → gif]', path.relative(ARTSY, vp));
       try {
         ffmpegVideoToGif(vp, outGif);
       } catch (e1) {
-        if (process.platform === 'darwin' && fs.existsSync(SWIFT_FRAME)) {
-          console.log('  ffmpeg gif failed, still-frame GIF fallback…', e1.message);
-          staticGifFromStillMac(vp, outGif);
+        if (process.platform === 'darwin') {
+          // Some iPhone MP4s have boxes ffmpeg can't parse; try AVFoundation transcode first.
+          const maxSec = envNum('ARTSY_GIF_MAX_SEC', 15);
+          const transcoded = tryTranscodeWithAvfoundationMac(vp, maxSec);
+          if (transcoded) {
+            try {
+              console.log('  ffmpeg read failed, AVFoundation transcode → gif…');
+              ffmpegVideoToGif(transcoded, outGif);
+            } finally {
+              try {
+                fs.unlinkSync(transcoded);
+              } catch (_) {}
+            }
+          } else if (fs.existsSync(SWIFT_FRAME)) {
+            console.log('  ffmpeg gif failed, still-frame GIF fallback…', e1.message);
+            staticGifFromStillMac(vp, outGif);
+          } else {
+            throw e1;
+          }
         } else {
           throw e1;
         }
       }
-      fs.unlinkSync(vp);
+      if (shouldDeleteVideos()) fs.unlinkSync(vp);
+      await gentleCooldown();
     } catch (e) {
       try {
         const outGif = path.join(path.dirname(vp), `${stem(vp)}.gif`);
         if (fs.existsSync(outGif)) fs.unlinkSync(outGif);
       } catch (_) {}
       console.error('  ✗', vp, e.message);
+      await gentleCooldown();
+    }
+  }
+
+  // If videos were deleted previously but posters remain, at least create looping GIFs from posters.
+  const posters = files.filter((f) => /_poster\.jpg$/i.test(f));
+  for (const poster of posters) {
+    const dir = path.dirname(poster);
+    const base = stem(poster).replace(/_poster$/i, '');
+    const outGif = path.join(dir, `${base}.gif`);
+    if (fs.existsSync(outGif) && !shouldOverwrite()) continue;
+
+    // Only do this when the source video is absent (otherwise above pass creates a real GIF).
+    const hasVideo = ['.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv'].some((ext) =>
+      fs.existsSync(path.join(dir, `${base}${ext}`)),
+    );
+    if (hasVideo) continue;
+
+    try {
+      console.log('[poster → gif]', path.relative(ARTSY, poster));
+      gifFromPosterJpg(poster, outGif);
+      await gentleCooldown();
+    } catch (e) {
+      try {
+        if (fs.existsSync(outGif)) fs.unlinkSync(outGif);
+      } catch (_) {}
+      console.error('  ✗', poster, e.message);
+      await gentleCooldown();
     }
   }
 
