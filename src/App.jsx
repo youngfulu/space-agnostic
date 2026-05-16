@@ -116,16 +116,20 @@ function App() {
           <div className="mobile-nav-label" data-category="tech">space n sound</div>
           <div className="mobile-nav-label" data-category="stage">visual research</div>
           <div className="mobile-nav-label" data-category="spatial">perform</div>
+          <div className="mobile-nav-label" data-category="index">index</div>
+          <div className="mobile-nav-label" data-category="materiality">materiality</div>
         </div>
       </div>
 
       <div id="mobileCategoryContent" className="mobile-category-content">
-        <button id="mobileCategoryBack" className="mobile-category-back">back</button>
         <div className="mobile-category-content-inner">
           <div id="mobileCategoryTitle" className="mobile-category-title"></div>
           <div id="mobileCategoryBody"></div>
         </div>
       </div>
+
+      {/* Back button is a top-level fixed element so its z-index is not bounded by mobileCategoryContent's stacking context */}
+      <button id="mobileCategoryBack" className="mobile-category-back" style={{ display: 'none' }}>back</button>
 
       <button id="selectionPrevBtn" className="selection-nav-btn selection-prev" type="button" aria-label="prev" style={{ display: 'none', opacity: 0 }}>&lt;</button>
       <button id="selectionNextBtn" className="selection-nav-btn selection-next" type="button" aria-label="next" style={{ display: 'none', opacity: 0 }}>&gt;</button>

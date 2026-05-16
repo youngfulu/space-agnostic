@@ -1388,18 +1388,19 @@ function initLoadingText() {
         loadingTextEl.appendChild(wordSpan);
     });
 
-    // Stagger choice buttons — mirror exactly the words pattern:
-    // set animationDelay inline per element FIRST, then add the .animating class that applies the animation.
+    // All choice buttons fade in together after last word finishes
     if (!isMobileDevice()) {
         const choiceBtns = document.getElementById('loadingChoiceButtons');
         if (choiceBtns) {
             const elements = Array.from(choiceBtns.querySelectorAll('.loading-choice-btn, .loading-choice-sep'));
             const lastWordEndMs = (totalWords - 1) * WORD_STEP_MS + FADE_MS;
-            elements.forEach((el, i) => {
-                el.style.animationDelay = (lastWordEndMs + i * 500) + 'ms';
-            });
-            // Add class after delays are set — animation starts with each element's inline delay
-            choiceBtns.classList.add('animating');
+            setTimeout(() => {
+                elements.forEach(el => {
+                    el.style.transition = 'opacity 0.7s ease-in';
+                    el.style.opacity = '1';
+                });
+                setTimeout(() => choiceBtns.classList.add('clickable'), 700);
+            }, lastWordEndMs);
         }
     }
 
@@ -4060,8 +4061,10 @@ function exitIndexMode() {
             contentInner.style.visibility = 'hidden';
             contentInner.style.opacity = '0';
         }
+        const mobileBack = document.getElementById('mobileCategoryBack');
+        if (mobileBack) mobileBack.style.display = 'none';
     }
-    
+
     // Restore all images
     points.forEach(p => {
         p.targetOpacity = 1.0;
@@ -5506,9 +5509,52 @@ function initMobileHomepageNav() {
     // Start checking after a short delay to allow loading screen to start fading
     setTimeout(showMobileNav, 100);
     
-    // Setup navigation label clicks
+    // Setup navigation label clicks — drag on a label forwards pan to canvas; tap fires category select
     navLabels.forEach(label => {
+        let _lStartX = 0, _lStartY = 0, _lDragging = false;
+
+        label.addEventListener('touchstart', (e) => {
+            if (!isMobileVersion || currentMobileCategory !== null) return;
+            _lStartX = e.touches[0].clientX;
+            _lStartY = e.touches[0].clientY;
+            _lDragging = false;
+            const rect = canvas.getBoundingClientRect();
+            lastTouchX = e.touches[0].clientX - rect.left;
+            lastTouchY = e.touches[0].clientY - rect.top;
+            lastTouchTime = performance.now();
+        }, { passive: true });
+
+        label.addEventListener('touchmove', (e) => {
+            if (!isMobileVersion || currentMobileCategory !== null) return;
+            const dx = e.touches[0].clientX - _lStartX;
+            const dy = e.touches[0].clientY - _lStartY;
+            if (!_lDragging && Math.sqrt(dx * dx + dy * dy) > 6) {
+                _lDragging = true;
+            }
+            if (_lDragging) {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const touchX = e.touches[0].clientX - rect.left;
+                const touchY = e.touches[0].clientY - rect.top;
+                const now = performance.now();
+                const dt = Math.max(16, now - lastTouchTime);
+                const dX = touchX - lastTouchX;
+                const dY = touchY - lastTouchY;
+                targetCameraPanX += dX;
+                targetCameraPanY += dY;
+                cameraPanX = targetCameraPanX;
+                cameraPanY = targetCameraPanY;
+                panVelocityX = dX / dt;
+                panVelocityY = dY / dt;
+                lastTouchX = touchX;
+                lastTouchY = touchY;
+                lastTouchTime = now;
+                lastInteractionTime = now;
+            }
+        }, { passive: false });
+
         label.addEventListener('click', (e) => {
+            if (_lDragging) { _lDragging = false; return; }
             const category = label.getAttribute('data-category');
             handleMobileCategorySelect(category);
         });
@@ -5607,18 +5653,24 @@ function drawMobileNavLines(svg, labels) {
         const labelX = rect.left + rect.width / 2;
         const labelY = rect.top + rect.height / 2;
         
-        // Create line from intersection to label
+        // Create line from intersection to label, stopping 20px before label center
         const dx = labelX - centerX;
         const dy = labelY - centerY;
-        if (dx * dx + dy * dy < 64 * 64) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 64) {
             return;
         }
+        const GAP = 20;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        const x2 = labelX - ux * GAP;
+        const y2 = labelY - uy * GAP;
 
         const line = document.createElementNS(svgNS, 'line');
         line.setAttribute('x1', centerX);
         line.setAttribute('y1', centerY);
-        line.setAttribute('x2', labelX);
-        line.setAttribute('y2', labelY);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
         line.setAttribute('stroke', '#fff');
         line.setAttribute('stroke-width', '0.5');
         line.setAttribute('opacity', '0.75'); // +25% vs 0.6 (mobile home only)
@@ -5684,6 +5736,46 @@ function handleMobileCategorySelect(category) {
             }
             return;
         }
+        // "index" — show full project list (all folders, no tag filter)
+        if (category === 'index') {
+            const allFolders = getTopLevelFolders().map(f => ({ path: f, name: f }));
+            isIndexMode = true;
+            indexModeTag = null;
+            indexModeFolders = allFolders;
+            selectedIndexFolder = null;
+            points.forEach(p => { p.targetOpacity = 0.0; p.isInactive = true; p.isHovered = false; });
+            stopMobileAutoConnections();
+            mobileAutoLines = [];
+            setMobileNavVisibility(false);
+            // Show mobileCategoryContent container (back button lives inside it)
+            const categoryContent = document.getElementById('mobileCategoryContent');
+            if (categoryContent) {
+                categoryContent.classList.add('visible');
+                categoryContent.style.visibility = 'visible';
+                categoryContent.style.opacity = '1';
+                categoryContent.style.pointerEvents = 'none';
+                categoryContent.style.background = 'transparent';
+            }
+            const contentInner = document.querySelector('.mobile-category-content-inner');
+            if (contentInner) { contentInner.style.display = 'none'; contentInner.style.visibility = 'hidden'; }
+            const mobileBack = document.getElementById('mobileCategoryBack');
+            if (mobileBack) {
+                mobileBack.style.setProperty('display', 'flex', 'important');
+                mobileBack.style.setProperty('visibility', 'visible', 'important');
+                mobileBack.style.setProperty('opacity', '1', 'important');
+                mobileBack.style.position = 'fixed';
+                mobileBack.style.left = '14px';
+                mobileBack.style.right = '14px';
+                mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+                mobileBack.style.top = 'auto';
+                mobileBack.style.background = 'transparent';
+                mobileBack.style.pointerEvents = 'auto';
+                mobileBack.style.zIndex = '20001';
+            }
+            showIndexFolderList(allFolders);
+            updateBackButtonVisibility();
+            return;
+        }
         const categoryContent = document.getElementById('mobileCategoryContent');
         if (categoryContent) {
             categoryContent.classList.remove('visible');
@@ -5691,8 +5783,21 @@ function handleMobileCategorySelect(category) {
             categoryContent.style.visibility = 'hidden';
             categoryContent.style.opacity = '0';
         }
-        const tag = category === 'spatial' ? 'spatial' : category;
+        // "materiality" maps to the "concept" internal tag
+        const tag = category === 'materiality' ? 'concept' : category === 'spatial' ? 'spatial' : category;
         filterByTag(tag);
+        // Always show back button for any tag category on mobile (filterByTag may return early if no folders)
+        const mobileBackTag = document.getElementById('mobileCategoryBack');
+        if (mobileBackTag) {
+            mobileBackTag.style.setProperty('display', 'flex', 'important');
+            mobileBackTag.style.setProperty('visibility', 'visible', 'important');
+            mobileBackTag.style.setProperty('opacity', '1', 'important');
+            mobileBackTag.style.position = 'fixed';
+            mobileBackTag.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+            mobileBackTag.style.top = 'auto';
+            mobileBackTag.style.pointerEvents = 'auto';
+            mobileBackTag.style.zIndex = '20001';
+        }
         updateBackButtonVisibility();
     } else {
         // Desktop: preserve existing behaviour
@@ -6078,26 +6183,32 @@ function _closeProjectIndexAnimated(callback, slideAboutBtn) {
 }
 
 // Stagger filter buttons back in after index close.
-// Order: ––––––, visual research, spatial design, sonic core, materiality, perform.
-// Each fades in over 0.5s with a 0.2s delay between items — smooth wave via CSS transition.
+// Total animation: 1.25s — stagger window 0.25s spread across all items, 1s fade each.
 function _staggerFilterButtonsIn() {
-    const sep = document.getElementById('dashSeparator');
-    const filterBtns = Array.from(document.querySelectorAll(
-        '.filter-button:not(#weAreButton):not(#backButton)'
+    // Separator is appended last in DOM but is leftmost visually — put it first
+    const sep  = document.getElementById('dashSeparator');
+    const rest = Array.from(document.querySelectorAll(
+        '#filterButtons .filter-button:not(#weAreButton):not(#backButton):not(#dashSeparator)'
     ));
-    const items = sep ? [sep, ...filterBtns] : filterBtns;
+    const items = sep ? [sep, ...rest] : rest;
+    if (!items.length) return;
+
+    const FADE_MS         = 1000;
+    const STAGGER_TOTAL   = 250;  // total spread across all items
+    const stepMs = items.length > 1 ? STAGGER_TOTAL / (items.length - 1) : 0;
+
     items.forEach((el, i) => {
         el.style.transition = 'none';
-        el.style.opacity = '0';
+        el.style.opacity    = '0';
         setTimeout(() => {
-            el.style.transition = 'opacity 1s ease-out';
-            el.style.opacity = '1';
-            // Clear inline opacity after fade so CSS :hover can work
+            el.style.transition = `opacity ${FADE_MS}ms ease-out`;
+            el.style.opacity    = '1';
+            // Clear inline styles once fully faded so CSS :hover works
             setTimeout(() => {
-                el.style.opacity = '';
+                el.style.opacity    = '';
                 el.style.transition = '';
-            }, 1050);
-        }, 20 + i * 350);
+            }, FADE_MS + 20);
+        }, Math.round(i * stepMs));
     });
 }
 
@@ -6305,7 +6416,7 @@ function _spawnGalleryImage() {
         img.style.left   = (Math.random() * maxX) + 'px';
         img.style.top    = (Math.random() * maxY) + 'px';
         img.style.zIndex = zBase;
-        img.style.cursor = 'pointer';
+        img.style.cursor = 'grab';
         area.appendChild(img);
         _galleryImgData.push({ el: img });
     } else {
@@ -6316,11 +6427,46 @@ function _spawnGalleryImage() {
         setTimeout(() => area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' }), 100);
     }
 
-    // Click: bring to top
-    img.addEventListener('click', () => {
-        const maxZ = _galleryImgData.reduce((m, d) => Math.max(m, parseInt(d.el.style.zIndex) || 0), 0);
-        img.style.zIndex = maxZ + 1;
-    });
+    // Drag + click-to-top (desktop only — mobile uses flow layout)
+    if (!isMob) {
+        let _dragStartX = 0, _dragStartY = 0;
+        let _imgStartLeft = 0, _imgStartTop = 0;
+        let _dragged = false;
+
+        const bringToTop = () => {
+            const maxZ = _galleryImgData.reduce((m, d) => Math.max(m, parseInt(d.el.style.zIndex) || 0), 0);
+            img.style.zIndex = maxZ + 1;
+        };
+
+        img.addEventListener('pointerdown', (ev) => {
+            if (ev.button !== 0) return;
+            ev.preventDefault();
+            bringToTop();
+            _dragged = false;
+            _dragStartX = ev.clientX;
+            _dragStartY = ev.clientY;
+            _imgStartLeft = parseFloat(img.style.left) || 0;
+            _imgStartTop  = parseFloat(img.style.top)  || 0;
+            img.setPointerCapture(ev.pointerId);
+            img.style.cursor = 'grabbing';
+        });
+
+        img.addEventListener('pointermove', (ev) => {
+            if (!img.hasPointerCapture(ev.pointerId)) return;
+            const dx = ev.clientX - _dragStartX;
+            const dy = ev.clientY - _dragStartY;
+            if (!_dragged && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) _dragged = true;
+            if (!_dragged) return;
+            img.style.left = (_imgStartLeft + dx) + 'px';
+            img.style.top  = (_imgStartTop  + dy) + 'px';
+        });
+
+        img.addEventListener('pointerup', (ev) => {
+            if (!img.hasPointerCapture(ev.pointerId)) return;
+            img.releasePointerCapture(ev.pointerId);
+            img.style.cursor = 'grab';
+        });
+    }
 
     // Fade in
     requestAnimationFrame(() => requestAnimationFrame(() => { img.style.opacity = '1'; }));

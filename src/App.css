@@ -516,6 +516,18 @@ body {
         top: calc(16px + env(safe-area-inset-top, 0px));
         right: calc(16px + env(safe-area-inset-right, 0px));
     }
+    .mobile-nav-label[data-category="index"] {
+        bottom: 10vh;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+    }
+    .mobile-nav-label[data-category="materiality"] {
+        top: 10vh;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+    }
     .mobile-nav-label[data-category="we-are"] {
         overflow: visible;
         /* Default center so circle is visible until script repositions */
@@ -742,13 +754,6 @@ body {
 .loading-choice-btn,
 .loading-choice-sep {
     opacity: 0;
-}
-
-/* JS adds .animating after setting animationDelay inline on each child — same pattern as words */
-.loading-choice-buttons.animating .loading-choice-btn,
-.loading-choice-buttons.animating .loading-choice-sep {
-    animation: wordFadeIn 0.7s ease-in forwards;
-    /* animationDelay overridden inline per element */
 }
 
 .loading-choice-buttons.clickable {
