@@ -1,7 +1,0 @@
-name: ()
-#
-Project type: ()
-year: ()
-Location:
-Contributor: 
-
