@@ -5947,7 +5947,7 @@ function parseProjectMeta(folderName, text) {
             const nums = yr[1].match(/\d{4}/g);
             if (nums) year = parseInt(nums[nums.length - 1]);
         }
-        const pt = text.match(/^project type:\s*(.+)/mi);
+        const pt = text.match(/^project type:\s*([^\n\r]+)/mi);
         if (pt) {
             const raw = stripParens(pt[1].trim());
             if (raw) projectType = raw.toLowerCase();
@@ -6128,10 +6128,12 @@ function renderProjectIndex() {
             nameEl.className = 'project-index-name';
             nameEl.textContent = proj.name.toLowerCase();
 
-            // Right cell: project type (from about.txt) or hashtags as fallback
+            // Right cell: project type (from about.txt) or hashtags as fallback, else "wip"
             const typeEl = document.createElement('span');
             typeEl.className = 'project-index-tags';
-            typeEl.textContent = proj.projectType || proj.tags.join(' · ');
+            const _desc = proj.projectType || proj.tags.join(' · ');
+            typeEl.textContent = _desc || 'wip';
+            if (!_desc) typeEl.classList.add('project-index-wip');
 
             row.appendChild(nameEl);
             row.appendChild(typeEl);

@@ -1,4 +1,4 @@
-name: (Ghisted)
+name: (Ghosted)
 #
 Project type: (extended animation, performance)
 year: (2024-)
