@@ -1,0 +1,6 @@
+name: (Beggar)
+#
+Project type: (extended animation, short film)
+year: (2021)
+Contributor: Ilya Duganov, Alinna Tikhonova
+

@@ -1,0 +1,5 @@
+name: (Cicada simulation)
+Project type: (Interactive audiovisual installation / participatory performance)
+Year: (2025)
+Location: (Gallery setup, up to 30 participants)
+Contributor: (Ilya Duganov, Mike Anisimov)

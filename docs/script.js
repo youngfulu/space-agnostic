@@ -38,9 +38,6 @@ function mobileReturnHome() {
     if (isWeAreMode) {
         clearWeAreMode();
     }
-    if (isFilterMode) {
-        clearFilter();
-    }
     if (isConnectionMode) {
         exitConnectionMode();
     }
@@ -95,6 +92,31 @@ if (!canvas) {
 const ctx = canvas ? canvas.getContext('2d') : null;
 if (!ctx && canvas) {
     console.error('Could not get 2d context from canvas!');
+}
+
+let canvasBoundingRect = null;
+function getCanvasRect() {
+    if (!canvasBoundingRect) canvasBoundingRect = canvas.getBoundingClientRect();
+    return canvasBoundingRect;
+}
+
+function showMobileBackButton() {
+    const btn = document.getElementById('mobileCategoryBack');
+    if (!btn) return;
+    btn.style.setProperty('display', 'flex', 'important');
+    btn.style.pointerEvents = 'auto';
+    btn.style.opacity = '1';
+    btn.style.visibility = 'visible';
+    btn.style.position = 'fixed';
+    btn.style.zIndex = '10010';
+}
+function hideMobileBackButton() {
+    const btn = document.getElementById('mobileCategoryBack');
+    if (!btn) return;
+    btn.style.setProperty('display', 'none', 'important');
+    btn.style.pointerEvents = 'none';
+    btn.style.opacity = '0';
+    btn.style.visibility = 'hidden';
 }
 
 // Performance/debug flags
@@ -353,9 +375,6 @@ const MOBILE_GRID_FADE_OUT_SPEED = 1 / (MOBILE_GRID_FADE_OUT_DURATION_MS / (1000
 // Mobile version state
 let isMobileVersion = false;
 let currentMobileCategory = null;
-let allowMobileAutoConnection = false;
-let mobileAutoConnectionTimer = null;
-let mobileAutoConnectionExitTimer = null;
 
 // Mobile auto dotted-line animation (background, non-interactive)
 const MOBILE_AUTO_LINE_MAX = 6;
@@ -420,7 +439,6 @@ function updateMobileAutoLines(now) {
     const inMobileHome = isMobileVersion &&
         currentMobileCategory === null &&
         alignedEmojiIndex === null &&
-        !isFilterMode &&
         !isConnectionMode &&
         !isWeAreMode;
     
@@ -580,7 +598,6 @@ function calculateConnectionLineImageSize(point, imageData) {
 function scheduleAlignedDesktopRelayoutIfNeeded(changedImagePath = null) {
     // Only matters for desktop horizontal alignment layout
     if (alignedEmojiIndex === null) return;
-    if (isFilterMode) return; // filter mode has its own layout / transitions
     if (isMobileDevice()) return;
     if (!alignedEmojis || alignedEmojis.length === 0) return;
 
@@ -790,7 +807,6 @@ function layoutAlignedEmojisDesktop(animate = true) {
 function scheduleAlignedMobileRelayoutIfNeeded(changedImagePath = null) {
     // Only matters for mobile vertical alignment layout
     if (alignedEmojiIndex === null) return;
-    if (isFilterMode) return;
     if (!isMobileDevice()) return;
     if (!alignedEmojis || alignedEmojis.length === 0) return;
 
@@ -984,8 +1000,9 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
 
 // Filter state
 let currentFilterTag = null; // null = no filter, otherwise the tag to filter by
-let filteredImages = []; // Array of filtered image points
-let isFilterMode = false; // Whether we're in filter mode
+// Desktop toggle filter — set of currently active tag strings (up to 5)
+let activeTags = new Set();
+const ALL_FILTER_TAGS = ['stage', 'install', 'tech', 'concept', 'spatial'];
 let isWeAreMode = false; // Whether we're in "We are" mode
 
 // Index mode state (hashtag-based folder navigation)
@@ -995,14 +1012,6 @@ let selectedIndexFolder = null; // Currently selected folder in index mode
 let indexModeTag = null; // Current hashtag being filtered
 
 // Hashtag to category mapping
-const HASHTAG_MAP = {
-    'stage': '#see',
-    'install': '#exp',
-    'concept': '#make',
-    'tech': '#sound',
-    'spatial': '#perf'
-};
-
 // Folder name to tags mapping (since imagePaths don't include hashtags)
 // Maps clean folder names to their hashtag categories
 const FOLDER_TAGS = {
@@ -1039,11 +1048,11 @@ const FOLDER_TAGS = {
 function deriveTagsFromFolderName(folderNameRaw) {
     const name = (folderNameRaw || '').toLowerCase();
     const tags = [];
-    if (name.includes('#stage') || name.includes('#see')) tags.push('stage');
+    if (name.includes('#stage') || name.includes('#see') || name.includes('#vis')) tags.push('stage');
     if (name.includes('#installation') || name.includes('#instalation') || name.includes('#instal') || name.includes('#exp')) tags.push('installation');
-    if (name.includes('#concept') || name.includes('#make')) tags.push('concept');
-    if (name.includes('#tech') || name.includes('#sound')) tags.push('tech');
-    if (name.includes('#spatial') || name.includes('#perf')) tags.push('spatial');
+    if (name.includes('#concept') || name.includes('#make') || name.includes('#mat')) tags.push('concept');
+    if (name.includes('#tech') || name.includes('#sound') || name.includes('#snd')) tags.push('tech');
+    if (name.includes('#spatial') || name.includes('#perf') || name.includes('#pf')) tags.push('spatial');
     return tags;
 }
 
@@ -1118,99 +1127,95 @@ function getTouchMidpoint(t1, t2) {
 
 // Image list — paths relative to Artsy/ (see scripts/generate-image-list.js)
 const imagePaths = [
-    'Acousmonium /Screenshot 2024-07-27 at 15.43.45.png',
-    'Acousmonium /pasted-image.jpg',
-    'Acousmonium /pasted-image.png',
-    'Acousmonium /photo_2562@19-07-2021_12-45-07.jpg',
-    'Addon 26 #instal/IMG_3654.png',
-    'Addon 26 #instal/IMG_3659.png',
-    'Addon 26 #instal/Screenshot 2026-01-03 at 15.53.45.png',
-    'Addon 26 #instal/Screenshot 2026-01-03 at 15.54.20.png',
-    'Addon 26 #instal/TDMovieOut.0.png',
-    'Addon 26 #instal/TDMovieOut.10.png',
-    'Addon 26 #instal/TDMovieOut.2.png',
-    'Addon 26 #instal/addon26.png',
-    'Addon 26 #instal/ind_Screenshot 2026-01-03 at 15.53.30.png',
-    'Addon 26 #instal/ind_addon pc.png',
-    'Addon 26 #instal/photo_2021-04-06_03-24-48.jpg',
-    'Addon 26 #instal/poster.jpg',
-    'Beggar/Screenshot 2023-07-18 at 17.48.01.png',
-    'Beggar/beggar.gif',
-    'Beggar/haram1.png',
-    'Beggar/scratches.gif',
-    'Beggar/test_full.gif',
-    'Broken Karaoke/bkk.jpg',
-    'Broken Karaoke/bkk2.jpg',
-    'Broken Karaoke/photo_2024-05-23_11-55-31.jpg',
-    'Broken Karaoke/photo_2024-07-02_01-50-58.jpg',
-    'Broken Karaoke/photo_2024-07-31_22-06-45.jpg',
-    'Broken Karaoke/photo_2024-08-13_16-43-04.jpg',
-    'CCC/Instagram story - 1@2x.png',
-    'CCC/Screenshot 2025-12-13 at 16.26.19.png',
-    'CCC/Screenshot 2025-12-13 at 16.26.46.png',
-    'CCC/Screenshot 2025-12-13 at 16.50.34.png',
-    'CCC/awarness.png',
-    'CCC/photo_2024-07-12_06-09-30.jpg',
-    'Chertochki /Screenshot 2025-03-13 at 23.22.55.png',
-    'Chertochki /Screenshot 2025-03-14 at 01.46.33.png',
-    'Chertochki /chertochki .jpg',
-    'Chertochki /photo_2024-05-02_01-23-25.jpg',
-    'Chertochki /photo_2024-05-11_21-43-51.jpg',
-    'Chertochki /photo_2024-05-20_21-16-49.jpg',
-    'Chertochki /photo_2025-03-19_21-49-03.jpg',
-    'Cicada simulation /cicada-nine — slide 02.png',
-    'Cicada simulation /cicada-nine — slide 05.png',
-    'Cicada simulation /cicada-nine — slide 06.png',
-    'Cicada simulation /cicada-nine — slide 07.png',
-    'Cicada simulation /cicada-nine — slide 09.png',
-    'Cicada simulation /cicada-nine — slide 14.png',
-    'Cicada simulation /png-transparent-cicada.png',
-    'Circular Repetition   #instal/CR.png',
-    'Circular Repetition   #instal/ComfyUI_00006_bw.png',
-    'Circular Repetition   #instal/Screenshot 2026-03-06 at 13.46.40.png',
-    'Circular Repetition   #instal/la bienalle.png',
-    'Definition /Screenshot 2023-07-18 at 17.56.35.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.17.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.25.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.35.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.42.png',
-    'Definition /Screenshot 2026-04-07 at 15.43.57.png',
-    'Definition /Screenshot 2026-04-07 at 18.53.45.png',
-    'Empreian Tiflis/Screen Shot 2018-10-25 at 15.09.43.png',
-    'Empreian Tiflis/Screen Shot 2018-10-25 at 15.12.25.png',
-    'Empreian Tiflis/tiflis.webp',
-    'Ergamo/120fps_final_00004.png',
-    'Ergamo/16fps_00006.png',
-    'Ergamo/16fps_00011.png',
-    'Ergamo/16fps_00020.png',
-    'Ergamo/30fps_final_00001.png',
-    'Ergamo/AnimateDiff_00004.png',
-    'Ergamo/AnimateDiff_00009 copy.gif',
-    'Ergamo/AnimateDiff_00009.gif',
-    'Ergamo/Screen Recording 2025-04-28 at 02.06.12.gif',
-    'Flora/Screenshot 2026-04-07 at 17.17.55.png',
-    'Flora/photo_2021-07-25_01-23-59.jpg',
-    'Ghosted/Ghosted.gif',
-    'Ghosted/IG walk .gif',
-    'Ghosted/IG walk _poster.jpg',
-    'Ghosted/ig-club.gif',
-    'Ghosted/ig-club_poster.jpg',
-    'Marche Nocturn /IMG_0457.jpg',
-    'Marche Nocturn /IMG_0458.jpg',
+    'Acousmonium #snd #pf/Screenshot 2024-07-27 at 15.43.45.png',
+    'Acousmonium #snd #pf/pasted-image.jpg',
+    'Acousmonium #snd #pf/pasted-image.png',
+    'Acousmonium #snd #pf/photo_2562@19-07-2021_12-45-07.jpg',
+    'Addon 26 #snd/IMG_3654.png',
+    'Addon 26 #snd/IMG_3659.png',
+    'Addon 26 #snd/Screenshot 2026-01-03 at 15.53.45.png',
+    'Addon 26 #snd/Screenshot 2026-01-03 at 15.54.20.png',
+    'Addon 26 #snd/TDMovieOut.0.png',
+    'Addon 26 #snd/TDMovieOut.10.png',
+    'Addon 26 #snd/TDMovieOut.2.png',
+    'Addon 26 #snd/addon26.png',
+    'Addon 26 #snd/ind_Screenshot 2026-01-03 at 15.53.30.png',
+    'Addon 26 #snd/ind_addon pc.png',
+    'Addon 26 #snd/photo_2021-04-06_03-24-48.jpg',
+    'Addon 26 #snd/poster.jpg',
+    'Beggar #pf/Screenshot 2023-07-18 at 17.48.01.png',
+    'Beggar #pf/photo_2021-02-10_20-56-48.jpg',
+    'Broken Karaoke #snd #pf/bc_artist.jpg',
+    'Broken Karaoke #snd #pf/bc_cover.jpg',
+    'Broken Karaoke #snd #pf/bkk.jpg',
+    'Broken Karaoke #snd #pf/bkk2.jpg',
+    'Broken Karaoke #snd #pf/photo_2024-05-23_11-55-31.jpg',
+    'Broken Karaoke #snd #pf/photo_2024-07-02_01-50-58.jpg',
+    'Broken Karaoke #snd #pf/photo_2024-07-31_22-06-45.jpg',
+    'Broken Karaoke #snd #pf/photo_2024-08-13_16-43-04.jpg',
+    'CCC /Instagram story - 1@2x.png',
+    'CCC /Screenshot 2025-12-13 at 16.26.19.png',
+    'CCC /Screenshot 2025-12-13 at 16.26.46.png',
+    'CCC /Screenshot 2025-12-13 at 16.50.34.png',
+    'CCC /awarness.png',
+    'CCC /photo_2024-07-12_06-09-30.jpg',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 02.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 03.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 04.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 05.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 06.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 07.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 08.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 09.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 12.png',
+    'Cicada simulation #exp #snd #pf/cicada-nine — slide 14.png',
+    'Circular Repetition   #snd #vis/CR.png',
+    'Circular Repetition   #snd #vis/ComfyUI_00006_bw.png',
+    'Circular Repetition   #snd #vis/Screenshot 2026-03-06 at 13.46.40.png',
+    'Circular Repetition   #snd #vis/la bienalle.png',
+    'Definition #vis #pf/Screenshot 2023-07-18 at 17.56.35.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.17.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.25.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.35.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.42.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 15.43.57.png',
+    'Definition #vis #pf/Screenshot 2026-04-07 at 18.53.45.png',
+    'Dude/Screenshot 2022-02-16 at 13.16.32.png',
+    'Dude/Screenshot 2024-06-04 at 12.34.38.png',
+    'Dude/photo_2021-01-06_18-39-57.jpg',
+    'Dude/photo_2021-01-27_13-56-31.jpg',
+    'Dude/photo_2021-01-27_13-56-34.jpg',
+    'Dude/photo_2022-01-18_15-28-07.jpg',
+    'Empreian Tiflis #snd #pf/Screen Shot 2018-10-25 at 15.09.43.png',
+    'Empreian Tiflis #snd #pf/Screen Shot 2018-10-25 at 15.12.25.png',
+    'Empreian Tiflis #snd #pf/tiflis.webp',
+    'Ergamo #vis/120fps_final_00004.png',
+    'Ergamo #vis/16fps_00006.png',
+    'Ergamo #vis/16fps_00011.png',
+    'Ergamo #vis/16fps_00020.png',
+    'Ergamo #vis/AnimateDiff_00004.png',
+    'Flora   #snd #pf #vis/Screenshot 2026-04-07 at 17.17.55.png',
+    'Flora   #snd #pf #vis/photo_2021-07-25_01-23-59.jpg',
+    'Ghosted  #snd #pf #vis/ComfyUI_temp_ehlyb_00002_.png',
+    'Ghosted  #snd #pf #vis/Ghosted.gif',
+    'Ghosted  #snd #pf #vis/IG walk .gif',
+    'Kwame the composer/Screenshot 2025-03-13 at 23.22.55.png',
+    'Kwame the composer/Screenshot 2025-03-14 at 01.46.33.png',
+    'Kwame the composer/chertochki .jpg',
+    'Kwame the composer/photo_2024-05-02_01-23-25.jpg',
+    'Kwame the composer/photo_2024-05-11_21-43-51.jpg',
+    'Kwame the composer/photo_2024-05-20_21-16-49.jpg',
+    'Kwame the composer/photo_2025-03-19_21-49-03.jpg',
+    'Kwame the composer/photo_2025-03-20_17-25-43.png',
     'Marche Nocturn /Screenshot 2023-07-11 at 23.48.52.png',
     'Marche Nocturn /Screenshot 2023-07-12 at 00.26.54.png',
     'Marche Nocturn /Screenshot 2023-07-18 at 17.05.47.png',
     'Marche Nocturn /Screenshot 2025-03-10 at 16.54.40.png',
     'Marche Nocturn /Screenshot 2025-03-10 at 16.54.51.png',
     'Marche Nocturn /mach nocturne .001.png',
-    'Middle east/IMG_8410_10mb.gif',
-    'Middle east/IMG_8433_10mb.gif',
-    'Middle east/IMG_8434_10mb.gif',
-    'Middle east/IMG_8576_10mb.gif',
-    'Middle east/IMG_8708_10mb.gif',
-    'Middle east/IMG_8720_10mb.gif',
     'Nat.sim /ComfyUI_00062_.png',
     'Nat.sim /IMG_4385.jpeg',
+    'Nat.sim /Screenshot 2025-04-13 at 20.39.59.png',
     'Nat.sim /Spat5Move.gif',
     'Nat.sim /nat.sim.gif',
     'Nat.sim /photo_2025-04-13_20-02-40.jpg',
@@ -1218,27 +1223,35 @@ const imagePaths = [
     'Psyche/IMG_A3BD3A5D911A-1.jpeg',
     'Psyche/Screenshot 2024-07-27 at 15.56.50.png',
     'Psyche/pasted-image.png',
-    'Screenshot 2023-07-11 at 23.47.11_result.png',
     'Seen/LTX-2_00005_.gif',
     'Seen/LTX-2_00015_.gif',
     'Seen/Screenshot 2026-02-03 at 16.28.31.png',
     'Seen/TDMovieOut.1.png',
     'Seen/fin front.png',
     'Shapes/photo_2022-09-09_18-36-57.jpg',
+    'Shapes/photo_2022-09-10_11-32-25.jpg',
     'Shapes/photo_2022-09-10_11-32-26.jpg',
     'Shapes/photo_2022-09-11_20-12-15.jpg',
     'Shapes/photo_2022-09-11_20-12-19.jpg',
     'Shapes/photo_2022-09-11_21-38-30.jpg',
     'Shapes/photo_2022-09-11_21-38-31.jpg',
     'Shapes/photo_2022-09-11_22-07-05.jpg',
+    'Slope/ComfyUI_00199_street.png',
+    'Slope/sl1.png',
+    'Slope/sl2.png',
+    'Slope/sl3.png',
+    'Slope/sl4.png',
+    'Slope/sl5.png',
     'Spectral shapes/IMG_9007.jpeg',
-    'Spectral shapes/IMG_9142.jpeg',
-    'Spectral shapes/Screenshot 2021-12-01 at 22.03.57.png',
     'Spectral shapes/Screenshot 2023-07-27 at 11.40.10.png',
     'Spectral shapes/click4.png',
+    'Spectral shapes/cut1.jpg',
     'Spectral shapes/hi_size.png',
     'Spectral shapes/long_one.png',
-    'Spectral shapes/warped IRs.png',
+    'Spectral shapes/photo_2026-05-06_19-03-39.jpg',
+    'Spectral shapes/photo_2026-05-07_14-40-44.jpg',
+    'Spectral shapes/plot2.png',
+    'Spectral shapes/plot_mini.png',
     'Spectral veawings/B/Screenshot 2023-06-11 at 21.41.40_result.jpg',
     'Spectral veawings/B/Screenshot 2023-06-12 at 01.42.41_result.jpg',
     'Spectral veawings/B/Screenshot 2023-06-12 at 02.30.07_result.jpg',
@@ -1247,6 +1260,7 @@ const imagePaths = [
     'Spectral veawings/B/Screenshot 2023-07-25 at 23.14.46_result.jpg',
     'Spectral veawings/B/Screenshot 2023-08-12 at 16.34.24_result.jpg',
     'Spectral veawings/B/Screenshot 2023-08-21 at 01.08.40_result.jpg',
+    'Spectral veawings/B/Screenshot 2023-12-09 at 05.19.10.png',
     'Spectral veawings/carpet16_result.jpg',
     'Spectral veawings/carpet17_result.jpg',
     'Spectral veawings/carpet22_result.jpg',
@@ -1257,14 +1271,15 @@ const imagePaths = [
     'Spectral veawings/carpet28_result.jpg',
     'Spectral veawings/carpet29.jpg',
     'Spectral veawings/carpet29_result.jpg',
-    'Thresholds/IMG_0302.jpg',
-    'Thresholds/IMG_0319.jpg',
     'Thresholds/ScreenRecording_04-09-2026 13-16-47_1.gif',
     'Thresholds/Screenshot 2024-11-24 at 22.18.45.png',
     'Thresholds/Screenshot 2024-11-24 at 22.21.12.png',
     'Thresholds/liminal8.png',
     'Thresholds/pasted-image.png',
+    'Thresholds/performe_th.png',
     'Thresholds/textured_3_1kMhVqro.jpg',
+    'Thresholds/textured_4_1kMhVqro.jpg',
+    'Thresholds/textured_5_1kMhVqro.jpg',
     'Thresholds/textured_9_1kMhVqro.jpg',
     'Your eyes /camvideo_33020e20.gif',
     'Your eyes /photo_2019-07-25_15-19-42.jpg',
@@ -1279,56 +1294,53 @@ const imagePaths = [
     'Zatmenie 2/pasted-image-2.jpg',
     'Zatmenie 2/pasted-image-filtered.jpeg',
     'Zatmenie 2/pasted-image.jpg',
-    'cultural issues/c1.jpg',
-    'cultural issues/c2.jpg',
-    'cultural issues/c3.jpg',
-    'ex_m6/IMG_1365.jpeg',
-    'ex_m6/IMG_1388.jpeg',
-    'ex_m6/Screenshot 2024-02-27 at 23.59.20.png',
-    'ex_m6/exm_book comp — slide 01.jpg',
-    'ex_m6/exm_book comp — slide 02.jpg',
-    'ex_m6/exm_book comp — slide 04.jpg',
-    'ex_m6/exm_book comp — slide 52.jpg',
-    'ex_m6/exm_book comp — slide 53.jpg',
-    'ex_m6/exm_book comp — slide 54.jpg',
-    'ex_m6/exm_book_comp_part1.gif',
-    'ex_m6/exm_book_comp_part2.gif',
-    'ex_m6/pasted-image-3.png',
-    'ex_m6/photo_2024-03-03_21-39-45.jpg',
-    'extractive memories/2023-08-28--20-20-00.gif',
-    'extractive memories/2023-08-28--20-20-00_poster.jpg',
-    'extractive memories/2023-11-19--13-29-55.gif',
-    'extractive memories/2023-11-19--13-29-55_poster.jpg',
-    'extractive memories/2023-11-27--19-13-04.gif',
-    'extractive memories/2023-11-27--19-13-04_poster.jpg',
-    'extractive memories/2023-11-27--20-11-28.gif',
-    'extractive memories/2023-11-27--20-11-28_poster.jpg',
-    'extractive memories/2023-11-29--01-01-18.gif',
-    'extractive memories/2023-11-29--01-01-18_poster.jpg',
-    'extractive memories/2023-12-06--16-57-24.gif',
-    'extractive memories/2023-12-06--16-57-24_poster.jpg',
-    'extractive memories/2023-12-06--16-58-42-2.gif',
-    'extractive memories/2023-12-06--16-58-42-2_poster.jpg',
-    'extractive memories/2023-12-06--18-07-53.gif',
-    'extractive memories/2023-12-06--18-07-53_poster.jpg',
-    'extractive memories/2023-12-06--18-55-00.gif',
-    'extractive memories/2023-12-06--18-55-00_poster.jpg',
-    'extractive memories/Screenshot 2024-10-13 at 03.18.05.png',
-    'extractive memories/exm_ — slide 01.jpg',
-    'extractive memories/exm_ — slide 02.jpg',
-    'extractive memories/exm_ — slide 05.jpg',
-    'extractive memories/exm_ — slide 06.jpg',
-    'extractive memories/nobodyfeelingtears_.gif',
-    'extractive memories/nobodyfeelingtears__poster.jpg',
-    'iced/gula vis.jpg',
-    'iced/iced.jpg',
-    'iced/iced3.jpg',
-    'iced/iced5.jpg',
-    'sculpture/IMG_9102.jpg',
-    'sculpture/Screenshot 2022-02-16 at 13.16.32.png',
-    'waevaev/a2471434847_1x1_700.jpg',
-    'waevaev/a3791641340_1x1_700.jpg',
-    'waevaev/a4276255458_1x1_700.jpg',
+    'cultural issues #exp #snd/bc_artist.jpg',
+    'cultural issues #exp #snd/bc_last_ceremonial.jpg',
+    'cultural issues #exp #snd/bc_s2.jpg',
+    'cultural issues #exp #snd/bc_sand_blues.jpg',
+    'cultural issues #exp #snd/c1.jpg',
+    'cultural issues #exp #snd/c2.jpg',
+    'cultural issues #exp #snd/c3.jpg',
+    'ex_m6  #snd #pf #vis/A/20240314_180920_resized.jpg',
+    'ex_m6  #snd #pf #vis/A/Photo027.jpg',
+    'ex_m6  #snd #pf #vis/IMG_1365.jpeg',
+    'ex_m6  #snd #pf #vis/IMG_1388.jpeg',
+    'ex_m6  #snd #pf #vis/Screenshot 2024-02-27 at 23.59.20.png',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 01.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 02.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 03.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 04.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 52.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 53.jpg',
+    'ex_m6  #snd #pf #vis/exm_book comp — slide 54.jpg',
+    'ex_m6  #snd #pf #vis/exm_book_comp_part1.gif',
+    'ex_m6  #snd #pf #vis/exm_book_comp_part2.gif',
+    'ex_m6  #snd #pf #vis/pasted-image-3.png',
+    'ex_m6  #snd #pf #vis/photo_2024-03-03_21-39-45.jpg',
+    'extractive memories   #snd #pf #vis/2023-11-19--13-29-55.gif',
+    'extractive memories   #snd #pf #vis/2023-11-27--19-13-04.gif',
+    'extractive memories   #snd #pf #vis/2023-11-27--20-11-28.gif',
+    'extractive memories   #snd #pf #vis/2023-11-29--01-01-18.gif',
+    'extractive memories   #snd #pf #vis/2023-12-06--16-57-24.gif',
+    'extractive memories   #snd #pf #vis/2023-12-06--16-58-42-2.gif',
+    'extractive memories   #snd #pf #vis/2023-12-06--18-07-53.gif',
+    'extractive memories   #snd #pf #vis/2023-12-06--18-55-00.gif',
+    'extractive memories   #snd #pf #vis/Screenshot 2024-10-13 at 03.18.05.png',
+    'extractive memories   #snd #pf #vis/exm_ — slide 01.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 02.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 03.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 04.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 05.jpg',
+    'extractive memories   #snd #pf #vis/exm_ — slide 06.jpg',
+    'extractive memories   #snd #pf #vis/nobodyfeelingtears_.gif',
+    'iced   #vis/gula vis.jpg',
+    'iced   #vis/iced.jpg',
+    'iced   #vis/iced3.jpg',
+    'iced   #vis/iced5.jpg',
+    'waevaev/bc_a.jpg',
+    'waevaev/bc_artist.jpg',
+    'waevaev/bc_tilde.jpg',
+    'waevaev/bc_v_v.jpg',
     'walker/5.jpg',
     'walker/6.1.jpg',
     'walker/prev-1.jpg',
@@ -1339,8 +1351,8 @@ const imagePaths = [
 // Image cache: thumb = grid (small), img = full-res (selection mode). Draw uses img || thumb.
 const imageCache = {};
 let imagesLoaded = 0;
+const countedImagePaths = new Set();
 let totalImages = 0;
-let imagesLoadedSuccessfully = 0;
 const imageLoadPromises = new Map();
 
 // Loading text variables
@@ -1369,37 +1381,41 @@ function initLoadingText() {
     allWordsVisible = false;
     debugLog('Initializing loading text:', text, { totalWords, filteredWords, words });
     
-    // Clear and prepare container
     loadingTextEl.innerHTML = '';
-    
-    // Create word elements - КАЖДОЕ слово отдельно, ВКЛЮЧАЯ "Spatial"
+
+    // CSS animation-delay per word — no JS timer jitter
+    const WORD_STEP_MS = 600;  // gap between each word starting
+    const FADE_MS      = 700;  // must match CSS animation duration
     filteredWords.forEach((word, index) => {
         const wordSpan = document.createElement('span');
         wordSpan.className = 'word';
         wordSpan.textContent = word;
-        // НЕ устанавливаем inline opacity - используем только CSS
+        wordSpan.style.animationDelay = (index * WORD_STEP_MS) + 'ms';
         loadingTextEl.appendChild(wordSpan);
-        
-        debugLog(`Created word ${index + 1}/${totalWords}: "${word}"`);
-        
-        // Animate word appearance with 0.6s delay per word
-        setTimeout(() => {
-            // Добавляем класс visible - CSS transition сработает
-            wordSpan.classList.add('visible');
-            visibleWordsCount++;
-            debugLog(`Word ${index + 1}/${totalWords} "${word}" visible (${visibleWordsCount}/${totalWords})`);
-            
-            // Check if all words are now visible
-            if (visibleWordsCount >= totalWords) {
-                // Даем время для CSS transition (0.6s)
-                setTimeout(() => {
-                    allWordsVisible = true;
-                    debugLog('All words are now visible!', { totalWords, visibleWordsCount, allWords: filteredWords });
-                    checkIfReadyToShowImages();
-                }, 650); // Немного больше чем transition duration
-            }
-        }, index * 600); // 0.6 seconds per word
     });
+
+    // All choice buttons fade in together after last word finishes
+    if (!isMobileDevice()) {
+        const choiceBtns = document.getElementById('loadingChoiceButtons');
+        if (choiceBtns) {
+            const elements = Array.from(choiceBtns.querySelectorAll('.loading-choice-btn, .loading-choice-sep'));
+            const lastWordEndMs = (totalWords - 1) * WORD_STEP_MS + FADE_MS;
+            setTimeout(() => {
+                elements.forEach(el => {
+                    el.style.transition = 'opacity 0.7s ease-in';
+                    el.style.opacity = '1';
+                });
+                setTimeout(() => choiceBtns.classList.add('clickable'), 700);
+            }, lastWordEndMs);
+        }
+    }
+
+    // Fire ready-check right after last word finishes fading in
+    const totalAnimMs = (totalWords - 1) * WORD_STEP_MS + FADE_MS + 80;
+    setTimeout(() => {
+        allWordsVisible = true;
+        checkIfReadyToShowImages();
+    }, totalAnimMs);
     
     // Safety: ensure words become "visible" after a timeout to avoid blocking the grid
     setTimeout(() => {
@@ -1448,11 +1464,7 @@ function checkIfReadyToShowImages() {
         if (allImagesLoadedTime === null) {
             allImagesLoadedTime = performance.now();
         }
-        hideLoadingIndicator();
-        // Set initial load time for mobile click prevention
-        if (isMobileDevice()) {
-            mobileInitialLoadTime = performance.now();
-        }
+        showLoadingChoiceScreen();
     }
 }
 
@@ -1495,29 +1507,76 @@ function precomputeConnectionTrajectories() {
     console.log(`Pre-computed connection trajectories for ${precomputedConnectionTrajectories.size} folders`);
 }
 
-// Hide loading indicator and show canvas
-let loadingComplete = false;
-function hideLoadingIndicator() {
+// ——— Loading choice screen (explore / index) ———
+
+let loadingComplete = false; // choice screen shown
+let exploreEntered = false;  // user chose explore
+
+// Step 1: loading done → show explore/index choice
+function showLoadingChoiceScreen() {
     if (loadingComplete) return;
     loadingComplete = true;
-    
-    // Pre-compute connection trajectories during loading screen
     precomputeConnectionTrajectories();
-    
+
+    // Fade out progress bar
+    const bar = document.getElementById('loadingProgressBar');
+    if (bar) {
+        bar.style.transition = 'opacity 0.35s ease-out';
+        bar.style.opacity = '0';
+        setTimeout(() => { if (bar.parentNode) bar.style.display = 'none'; }, 400);
+    }
+
+    // On mobile: skip choice, go straight to explore (mobile nav shows automatically)
+    if (isMobileDevice()) {
+        prefetchProjectMeta(); // needed for category year-by-year lists
+        enterExploreMode();
+        return;
+    }
+
+    // Enable clicks now that images are ready (animation was already started in initLoadingText)
+    const btns = document.getElementById('loadingChoiceButtons');
+    if (btns) btns.classList.add('clickable');
+
+    // Prefetch project metadata in background so index is ready
+    prefetchProjectMeta();
+}
+
+// Step 2a: user chose explore — dismiss overlay, reveal canvas
+function enterExploreMode() {
     const loadingIndicator = document.getElementById('loadingIndicator');
-    if (loadingIndicator) {
+    if (loadingIndicator && !loadingIndicator.classList.contains('hidden')) {
         loadingIndicator.classList.add('hidden');
         setTimeout(() => {
-            if (loadingIndicator.parentNode) {
-                loadingIndicator.parentNode.removeChild(loadingIndicator);
-            }
+            if (loadingIndicator.parentNode) loadingIndicator.parentNode.removeChild(loadingIndicator);
         }, 1000);
     }
-    
-    if (canvas) {
-        canvas.classList.add('images-loaded');
+    // Only hide project index instantly when NOT coming from the animated indexBackBtn path
+    // (animated path calls _closeProjectIndexAnimated before enterExploreMode)
+    const projectIndexEl = document.getElementById('projectIndex');
+    const wasProjectIndex = projectIndexEl && projectIndexEl.classList.contains('visible');
+    if (!wasProjectIndex) hideProjectIndex();
+    // Restore filter buttons if they were hidden (e.g. after filter/connection/selection)
+    if (!isMobileDevice() && !wasProjectIndex) {
+        document.querySelectorAll('.filter-button:not(#weAreButton)').forEach(btn => {
+            btn.style.opacity = ''; // clear inline so CSS :hover can work
+            btn.style.transition = '';
+        });
+    }
+    // exploreIndexBtn: show only in clean explore (no filter, no selection, no about)
+    const exploreIndexBtn = document.getElementById('exploreIndexBtn');
+    if (exploreIndexBtn) {
+        const cleanExplore = !isWeAreMode && alignedEmojiIndex === null && !isConnectionMode && !isIndexMode;
+        exploreIndexBtn.style.display = (isMobileDevice() || !cleanExplore) ? 'none' : '';
+    }
+    if (canvas) canvas.classList.add('images-loaded');
+    if (!exploreEntered) {
+        exploreEntered = true;
+        if (isMobileDevice()) mobileInitialLoadTime = performance.now();
     }
 }
+
+// Legacy alias (called from safety timeout)
+function hideLoadingIndicator() { enterExploreMode(); }
 
 // Load all images with better error handling
 function loadImages() {
@@ -1527,7 +1586,6 @@ function loadImages() {
     const uniquePaths = [...new Set(imagePaths)];
     totalImages = uniquePaths.length;
     imagesLoaded = 0;
-    imagesLoadedSuccessfully = 0;
     updateLoadingProgressBar();
     
     if (uniquePaths.length === 0) {
@@ -1564,7 +1622,7 @@ function loadImages() {
             console.warn('Loading timed out — forcing grid display');
             allWordsVisible = true;
             allImagesLoaded = true;
-            hideLoadingIndicator();
+            showLoadingChoiceScreen();
         }
     }, MAX_LOADING_SCREEN_WAIT_MS);
 }
@@ -1782,7 +1840,10 @@ function loadImageOnce(path, useThumb, skipProgress) {
     return new Promise((resolve, reject) => {
         const cached = imageCache[path];
         if (useThumb && cached && (cached.thumb || cached.img)) {
-            if (!skipProgress) { imagesLoaded++; updateLoadingProgressBar(); }
+            if (!skipProgress) {
+                if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
+                updateLoadingProgressBar();
+            }
             resolve(cached);
             return;
         }
@@ -1831,8 +1892,7 @@ function loadImageOnce(path, useThumb, skipProgress) {
                 entry.error = false;
 
                 if (!skipProgress) {
-            imagesLoaded++;
-            imagesLoadedSuccessfully++;
+                    if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
                     updateLoadingProgressBar();
                     debugLog('Loaded ' + (useThumb ? 'thumb' : 'full') + ' ' + path);
                 }
@@ -1841,7 +1901,10 @@ function loadImageOnce(path, useThumb, skipProgress) {
                 resolve(entry);
             } catch (err) {
                 console.warn('Image onload error:', path, err);
-                if (!skipProgress) { imagesLoaded++; updateLoadingProgressBar(); }
+                if (!skipProgress) {
+                    if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
+                    updateLoadingProgressBar();
+                }
                 reject(err);
             }
         };
@@ -1849,12 +1912,18 @@ function loadImageOnce(path, useThumb, skipProgress) {
         img.onerror = () => {
             if (useThumb) {
                 loadImageOnce(path, false, skipProgress).then(resolve).catch(() => {
-                    if (!skipProgress) { imagesLoaded++; updateLoadingProgressBar(); }
+                    if (!skipProgress) {
+                        if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
+                        updateLoadingProgressBar();
+                    }
                     reject(new Error('Failed to load image: ' + path));
                 });
                 return;
             }
-            if (!skipProgress) { imagesLoaded++; updateLoadingProgressBar(); }
+            if (!skipProgress) {
+                if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
+                updateLoadingProgressBar();
+            }
             reject(new Error('Failed to load image: ' + path));
         };
 
@@ -1965,7 +2034,7 @@ function generatePoints(count, minDistance) {
                     imagePath: currentImagePath,
                     folderPath: folderPath,
                     emojiIndex: pointIndex + 1,
-                    isAligned: false, isFiltered: false, filteredFolder: null,
+                    isAligned: false,
                     targetX: 0, targetY: 0, currentAlignedX: x, currentAlignedY: y,
                     targetSize: 0, currentSize: 0, opacity: 1.0, targetOpacity: 1.0,
                     alignmentStartTime: 0, startX: x, startY: y, startSize: 0,
@@ -1985,7 +2054,7 @@ function generatePoints(count, minDistance) {
                 x: x, y: y, baseX: x, baseY: y, originalBaseX: x, originalBaseY: y,
                 layer: (pointIndex % 2 === 0) ? 'layer_1' : 'layer_2',
                 imagePath: currentImagePath, folderPath: folderPath, emojiIndex: pointIndex + 1,
-                isAligned: false, isFiltered: false, filteredFolder: null,
+                isAligned: false,
                 targetX: 0, targetY: 0, currentAlignedX: x, currentAlignedY: y,
                 targetSize: 0, currentSize: 0, opacity: 1.0, targetOpacity: 1.0,
                 alignmentStartTime: 0, startX: x, startY: y, startSize: 0,
@@ -2045,7 +2114,7 @@ function handleMouseMove(e) {
             hoveredPoint = null;
             hoverStartTime = 0;
             // Restore opacity if not in any special mode
-            if (alignedEmojiIndex === null && !isFilterMode && !isConnectionMode) {
+            if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
                 points.forEach(p => {
                     p.targetOpacity = 1.0;
                     p.isHovered = false;
@@ -2055,11 +2124,11 @@ function handleMouseMove(e) {
         }
         return;
     }
-    
+
     // Mouse is over canvas
     mouseOverCanvas = true;
-    
-    const rect = canvas.getBoundingClientRect();
+
+    const rect = getCanvasRect();
     const mouseXPos = e.clientX - rect.left;
     const mouseYPos = e.clientY - rect.top;
     
@@ -2116,10 +2185,10 @@ function handleTouchStart(e) {
     }
     
     const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-    const blockSelection = isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isFilterMode && !isConnectionMode;
+    const blockSelection = isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isConnectionMode;
     
     if (e.touches.length > 0) {
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         const touchX = e.touches[0].clientX - rect.left;
         const touchY = e.touches[0].clientY - rect.top;
         lastTouchX = touchX;
@@ -2132,7 +2201,7 @@ function handleTouchStart(e) {
         
         // Mobile-specific: handle two-tap behavior for images (disabled on random grid home)
         // IMPORTANT: Disable selection mode when pinching (zooming with two fingers)
-        if (!blockSelection && isMobile && e.touches.length === 1 && !isFilterMode && !isPinching) {
+        if (!blockSelection && isMobile && e.touches.length === 1 && !isPinching) {
             // Prevent clicks for 2 seconds after home screen loads
             if (mobileInitialLoadTime !== null) {
                 const timeSinceLoad = performance.now() - mobileInitialLoadTime;
@@ -2217,7 +2286,7 @@ function handleTouchStart(e) {
 
     // Two-finger pinch to zoom (smooth, native feel)
     if (e.touches.length === 2) {
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         isPinching = true;
         useContinuousZoom = true;
         // Disable drag while pinching
@@ -2242,10 +2311,10 @@ function handleTouchStart(e) {
 function handleTouchMove(e) {
     markUserInteracted();
     const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-    const blockSelection = isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isFilterMode && !isConnectionMode;
+    const blockSelection = isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isConnectionMode;
     
     if (e.touches.length > 0) {
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         const touchX = e.touches[0].clientX - rect.left;
         const touchY = e.touches[0].clientY - rect.top;
         const now = performance.now();
@@ -2261,7 +2330,7 @@ function handleTouchMove(e) {
                     var newZoom = pinchStartZoom * ratio;
                     var cX = canvas.width / 2;
                     var cY = canvas.height / 2;
-                    var curZ = targetZoomLevel || globalZoomLevel || 1.0;
+                    var curZ = targetZoomLevel ?? globalZoomLevel ?? 1.0;
                     var curPanX = cameraPanX;
                     var curPanY = cameraPanY;
                     newZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
@@ -2374,7 +2443,7 @@ function handleMouseLeave() {
             exitConnectionMode();
         }
         // Restore opacity if not in any special mode
-        if (alignedEmojiIndex === null && !isFilterMode && !isConnectionMode) {
+        if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
             points.forEach(p => {
                 p.targetOpacity = 1.0;
                 p.isHovered = false;
@@ -2409,35 +2478,19 @@ function handleMouseDown(e) {
     if (timeSinceLastInteraction < CLICK_DELAY_AFTER_INTERACTION) {
         // Still interacting - start dragging instead
         isDragging = true;
-        const rect = canvas.getBoundingClientRect();
+        const rect = getCanvasRect();
         lastDragX = e.clientX - rect.left;
         lastDragY = e.clientY - rect.top;
         canvas.style.cursor = 'grabbing';
         return;
     }
-    
-    const rect = canvas.getBoundingClientRect();
+
+    const rect = getCanvasRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     
     const clickedPoint = findPointAtMouse(mouseX, mouseY);
-    
-    // Handle clicks in filter mode
-    if (isFilterMode) {
-        if (clickedPoint && clickedPoint.isFiltered) {
-            handleFilteredImageClick(clickedPoint);
-            e.preventDefault();
-            return;
-        } else if (!clickedPoint) {
-            // Allow dragging in filter mode when clicking empty space
-            isDragging = true;
-            lastDragX = mouseX;
-            lastDragY = mouseY;
-            canvas.style.cursor = 'grabbing';
-            return;
-        }
-    }
-    
+
     // When in connection mode, click on empty space (not on connected images) returns to home screen
     if (isConnectionMode && !clickedPoint) {
         exitConnectionMode();
@@ -2460,6 +2513,15 @@ function handleMouseDown(e) {
         }
         // If clicking on an aligned image or empty space, allow drag navigation
         if ((clickedPoint && clickedPoint.isAligned) || !clickedPoint) {
+            if (clickedPoint && clickedPoint.isAligned && _isBandcampImage(clickedPoint.imagePath)) {
+                const folder = clickedPoint.folderPath || normalizeFolderPathFromImagePath(clickedPoint.imagePath);
+                _bcClickStartX = mouseX;
+                _bcClickStartY = mouseY;
+                _bcClickFolder = folder;
+            } else {
+                _bcClickStartX = null;
+                _bcClickFolder = null;
+            }
             carouselAutoScrollPaused = true; // Pause carousel on click
             isDragging = true;
             lastDragX = mouseX;
@@ -2526,8 +2588,52 @@ function handleMouseDown(e) {
     }
 }
 
+// Bandcamp click tracking (Option A: bc_ images open external URL on clean click)
+let _bcClickStartX = null, _bcClickStartY = null, _bcClickFolder = null;
+
+function _isBandcampImage(imagePath) {
+    return (imagePath || '').split('/').pop().startsWith('bc_');
+}
+function _getBandcampUrl(folderPath) {
+    return (window.__BC_URLS__ && window.__BC_URLS__[folderPath]) || null;
+}
+
+// Preload bandcamp.txt for all folders that contain bc_ images, so URLs are
+// ready before the user opens any folder (avoids async race on first click).
+function _preloadBandcampUrls() {
+    const bcFolders = new Set();
+    (imagePaths || []).forEach(p => {
+        const fname = p.split('/').pop();
+        if (fname && fname.startsWith('bc_')) {
+            const folder = p.substring(0, p.lastIndexOf('/'));
+            if (folder) bcFolders.add(folder);
+        }
+    });
+    const origin = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    if (!window.__BC_URLS__) window.__BC_URLS__ = {};
+    bcFolders.forEach(folder => {
+        const encodedPath = folder.split('/').map(s => encodeURIComponent(s)).join('/');
+        const url = origin + pathPrefix + '/img/' + encodedPath + '/bandcamp.txt';
+        fetch(url).then(r => r.ok ? r.text() : null).catch(() => null).then(text => {
+            if (text && text.trim()) window.__BC_URLS__[folder] = text.trim();
+        });
+    });
+}
+
 // Mouse up handler (end drag)
-function handleMouseUp() {
+function handleMouseUp(e) {
+    if (_bcClickStartX !== null && e) {
+        const rect = getCanvasRect();
+        const dx = (e.clientX - rect.left) - _bcClickStartX;
+        const dy = (e.clientY - rect.top) - _bcClickStartY;
+        if (Math.sqrt(dx * dx + dy * dy) < 8) {
+            const url = _getBandcampUrl(_bcClickFolder);
+            if (url) window.open(url, '_blank', 'noopener');
+        }
+        _bcClickStartX = null;
+        _bcClickFolder = null;
+    }
     if (isDragging) {
         carouselAutoScrollPaused = false; // Resume carousel when user releases
     }
@@ -2548,16 +2654,16 @@ function handleWheel(e) {
     // Update last interaction time to prevent accidental clicks
     lastInteractionTime = performance.now();
     
-    const rect = canvas.getBoundingClientRect();
+    const rect = getCanvasRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    
+
     // Store zoom focal point for smooth interpolation in draw loop
     zoomFocalPointX = mouseX;
     zoomFocalPointY = mouseY;
     
-    // If in selection, filter, or connection (dotted line) mode, use smooth gradual zoom/pan at any zoom level
-    if (alignedEmojiIndex !== null || isFilterMode || isConnectionMode) {
+    // If in selection or connection (dotted line) mode, use smooth gradual zoom/pan at any zoom level
+    if (alignedEmojiIndex !== null || isConnectionMode) {
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
 
@@ -2776,9 +2882,9 @@ function findPointAtMouse(mouseX, mouseY) {
         const point = points[i];
         let x, y;
         
-        if (point.isAligned || point.isFiltered) {
-            x = point.isFiltered ? point.currentAlignedX : point.currentAlignedX;
-            y = point.isFiltered ? point.currentAlignedY : point.currentAlignedY;
+        if (point.isAligned) {
+            x = point.currentAlignedX;
+            y = point.currentAlignedY;
         } else {
             // Use layer-specific speed for parallax
             const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
@@ -2894,23 +3000,27 @@ function unalignEmojis() {
     smoothMouseX = targetMouseX;
     smoothMouseY = targetMouseY;
     
-    // Restore images opacity and reset inactive flag for all points
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-        p.isInactive = false; // Reset inactive flag
-    });
-    
+    // Restore images opacity — respect active tag filters
+    if (activeTags.size > 0) {
+        applyTagFilters();
+    } else {
+        points.forEach(p => {
+            p.targetOpacity = 1.0;
+            p.isInactive = false;
+        });
+    }
+
     // Set zoom target to default (will be animated by phase -1)
     currentZoomIndex = initialZoomIndex;
     
-    // Reset opacity for all images
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-    });
-    
     // Update back button visibility
     updateBackButtonVisibility();
-    
+    // Restore exploreIndexBtn on unalign (back to clean grid)
+    if (!isMobileDevice()) {
+        const eib = document.getElementById('exploreIndexBtn');
+        if (eib) eib.style.display = '';
+    }
+
     // Hide prev/next buttons with 0.1s fade-out
     hideSelectionNavButtons();
 }
@@ -2980,7 +3090,7 @@ function enterConnectionMode(clickedPoint, isClicked = false, allowMobileAuto = 
     }
     
     // On mobile homepage random grid, keep images inert (no dotted line animation)
-    if (isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isFilterMode && !isConnectionMode && !allowMobileAuto) {
+    if (isMobileVersion && currentMobileCategory === null && alignedEmojiIndex === null && !isConnectionMode && !allowMobileAuto) {
         return;
     }
     
@@ -3000,14 +3110,11 @@ function enterConnectionMode(clickedPoint, isClicked = false, allowMobileAuto = 
     // Track if connection mode was entered via click or auto-hover
     isConnectionModeClicked = isClicked;
     
-    // Clear any existing alignment/filter/connection
+    // Clear any existing alignment/connection
     if (alignedEmojiIndex !== null) {
         unalignEmojis();
     }
-    if (isFilterMode) {
-        clearFilter();
-    }
-    
+
     // Get folder path
     let clickedFolderPath = clickedPoint.folderPath;
     if (!clickedFolderPath) {
@@ -3039,8 +3146,7 @@ function enterConnectionMode(clickedPoint, isClicked = false, allowMobileAuto = 
     // Ensure all connected points are NOT aligned (stay at original positions)
     connectedPoints.forEach(p => {
         p.isAligned = false;
-        p.isFiltered = false;
-        // Reset to original positions if they were aligned/filtered
+        // Reset to original positions if they were aligned
         if (p.targetX !== p.originalBaseX || p.targetY !== p.originalBaseY) {
             p.targetX = p.originalBaseX;
             p.targetY = p.originalBaseY;
@@ -3105,12 +3211,16 @@ function exitConnectionMode() {
     mobileLastTappedPoint = null; // Reset mobile tap tracking
     autoHoverTriggerPoint = null; // Clear auto-hover trigger point
     
-    // Restore opacity for all images and reset inactive flag
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-        p.isInactive = false; // Reset inactive flag
-    });
-    
+    // Restore opacity — respect active tag filters
+    if (activeTags.size > 0) {
+        applyTagFilters();
+    } else {
+        points.forEach(p => {
+            p.targetOpacity = 1.0;
+            p.isInactive = false;
+        });
+    }
+
     updateBackButtonVisibility();
 }
 
@@ -3161,6 +3271,7 @@ function handleEmojiClick(clickedPoint) {
     if (isMobileVersion) {
         return;
     }
+    if (typeof window._hideExploreIndexBtn === 'function') window._hideExploreIndexBtn();
     
     // Block if selection mode is not available (images not loaded or cooldown active)
     if (!isSelectionModeAvailable()) {
@@ -3224,8 +3335,8 @@ function handleEmojiClick(clickedPoint) {
     // Update back button visibility
     updateBackButtonVisibility();
     
-    // Show prev/next buttons with 0.2s fade-in (desktop only; horizontal gallery scroll)
-    if (!isMobileDevice()) {
+    // Show prev/next buttons with 0.2s fade-in (desktop only, explore mode only)
+    if (!isMobileDevice() && !isIndexMode) {
         showSelectionNavButtons();
     }
 }
@@ -3428,7 +3539,42 @@ function clearHoverState() {
 }
 
 // Filter functions - now implements index mode with folder list
+// Apply desktop toggle filter — dim images that don't match any active tag
+function applyTagFilters() {
+    if (activeTags.size === 0) {
+        points.forEach(p => { p.targetOpacity = 1.0; p.isInactive = false; });
+        return;
+    }
+    points.forEach(p => {
+        const folderName = (p.folderPath || p.imagePath.substring(0, p.imagePath.lastIndexOf('/'))).split('/').pop().trim();
+        const pTags = getFolderTags(folderName);
+        const matches = pTags.some(t => activeTags.has(t));
+        p.targetOpacity = matches ? 1.0 : 0.0;
+        p.isInactive = !matches;
+    });
+}
+
+// Desktop toggle filter — called from desktop filter button clicks
+function toggleFilterTag(tag) {
+    // Mark as interacted so the draw loop stops resetting all opacities to 1
+    markUserInteracted();
+
+    if (activeTags.has(tag)) {
+        activeTags.delete(tag);
+    } else {
+        activeTags.add(tag);
+    }
+    // All 5 active = show everything, reset all buttons
+    if (activeTags.size >= ALL_FILTER_TAGS.length) {
+        activeTags.clear();
+    }
+    applyTagFilters();
+    updateFilterButtons();
+    updateBackButtonVisibility();
+}
+
 function filterByTag(tag) {
+    if (typeof window._hideExploreIndexBtn === 'function') window._hideExploreIndexBtn();
     // Clear "we are" mode when switching to another menu section
     if (isWeAreMode) {
         clearWeAreMode();
@@ -3535,22 +3681,18 @@ function filterByTag(tag) {
         if (categoryTitle) categoryTitle.style.display = 'none';
         if (categoryBody) categoryBody.style.display = 'none';
         
+        showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.setProperty('display', 'flex', 'important');
-            mobileBack.style.setProperty('visibility', 'visible', 'important');
-            mobileBack.style.setProperty('opacity', '1', 'important');
-            mobileBack.style.position = 'fixed';
             mobileBack.style.left = '14px';
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
-            mobileBack.style.pointerEvents = 'auto';
             mobileBack.style.zIndex = '20001';
         }
     }
-    
+
     // Show back button
     updateBackButtonVisibility();
     
@@ -3572,59 +3714,107 @@ function showIndexFolderList(folders) {
     const isMobile = isMobileDevice();
     
     if (isMobile) {
+        // Dim canvas to 5% — list overlays it
+        if (canvas) canvas.style.opacity = '0.05';
+
         container.style.left = '14px';
         container.style.right = '14px';
-        container.style.top = '120px';
-        container.style.bottom = 'auto';
+        container.style.top = '80px';
+        container.style.bottom = '80px';
         container.style.transform = 'none';
         container.style.width = 'calc(100% - 28px)';
         container.style.alignItems = 'flex-start';
-        container.style.gap = '10px';
+        container.style.flexDirection = 'column';
+        container.style.gap = '0';
         container.style.overflowY = 'auto';
-        container.style.maxHeight = '70vh';
+        container.style.maxHeight = '';
         container.style.setProperty('display', 'flex', 'important');
         container.style.zIndex = '20000';
-        
-        // Hide mobile nav in folder list mode
+
+        // Group folders by year using cached meta; retry if still loading
+        const meta = window.__PROJECT_META__ || {};
+        const anyInFlight = folders.some(folder => {
+            const fname = (folder.path.split('/').pop() || folder.name || '').trim();
+            return meta[fname] === null; // null = fetch in progress
+        });
+        if (anyInFlight) {
+            setTimeout(() => showIndexFolderList(folders), 800);
+            return;
+        }
+        const byYear = {};
+        folders.forEach(folder => {
+            const fname = (folder.path.split('/').pop() || folder.name || '').trim();
+            const m = (meta[fname] && meta[fname] !== null) ? meta[fname] : parseProjectMeta(fname, null);
+            const yr = m.year || 0;
+            if (!byYear[yr]) byYear[yr] = [];
+            const cleanName = (folder.name || '').replace(/\s*#.*$/, '').trim() || folder.name;
+            const hashtag = m.projectType ? m.projectType.toLowerCase() : getFolderTags(fname).map(t => '#' + t).join(' ');
+            byYear[yr].push({ cleanName, hashtag, path: folder.path });
+        });
+        const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+
+        // Render year groups with staggered appearance
+        let animIdx = 0;
+        years.forEach(yr => {
+            // Year label
+            const yrEl = document.createElement('div');
+            yrEl.className = 'mob-cat-year-label';
+            yrEl.textContent = yr || '—';
+            yrEl.style.opacity = '0';
+            yrEl.style.transition = 'opacity 0.3s ease-out';
+            yrEl.style.marginTop = animIdx === 0 ? '0' : '20px';
+            container.appendChild(yrEl);
+            const yrIdx = animIdx++;
+            setTimeout(() => { yrEl.style.opacity = '1'; }, yrIdx * 80);
+
+            // Divider
+            const divEl = document.createElement('div');
+            divEl.className = 'mob-cat-divider';
+            divEl.style.marginBottom = '4px';
+            container.appendChild(divEl);
+
+            byYear[yr].forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'index-folder-item';
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.alignItems = 'baseline';
+                row.style.width = '100%';
+                row.style.padding = '6px 0';
+                row.style.whiteSpace = 'normal';
+
+                const nameEl = document.createElement('span');
+                nameEl.textContent = item.cleanName.toLowerCase();
+                nameEl.style.flex = '1';
+
+                const tagEl = document.createElement('span');
+                tagEl.textContent = item.hashtag;
+                tagEl.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.4);text-align:right;white-space:nowrap;flex-shrink:0;margin-left:12px;';
+
+                row.appendChild(nameEl);
+                row.appendChild(tagEl);
+                row.dataset.folderPath = item.path;
+                row.addEventListener('click', () => {
+                    selectIndexFolder(item.path, item.cleanName);
+                });
+                container.appendChild(row);
+
+                const rowIdx = animIdx++;
+                setTimeout(() => { row.classList.add('visible'); }, rowIdx * 80);
+            });
+        });
+
         setMobileNavVisibility(false);
-        
-        // Show mobileCategoryContent but keep inner content hidden (so back button is visible)
-        const categoryContent = document.getElementById('mobileCategoryContent');
-        if (categoryContent) {
-            categoryContent.classList.add('visible');
-            categoryContent.style.visibility = 'visible';
-            categoryContent.style.opacity = '1';
-            categoryContent.style.pointerEvents = 'none'; // Let clicks pass through to folder list
-            categoryContent.style.background = 'transparent';
-        }
-        
-        // Hide the inner content completely
-        const contentInner = document.querySelector('.mobile-category-content-inner');
-        if (contentInner) {
-            contentInner.style.display = 'none';
-            contentInner.style.visibility = 'hidden';
-            contentInner.style.opacity = '0';
-        }
-        
-        // Also hide title/body specifically
-        const categoryTitle = document.getElementById('mobileCategoryTitle');
-        const categoryBody = document.getElementById('mobileCategoryBody');
-        if (categoryTitle) categoryTitle.style.display = 'none';
-        if (categoryBody) categoryBody.style.display = 'none';
-        
-        // Ensure mobile back is visible in folder list mode
+
+        // Show back button
+        showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.setProperty('display', 'flex', 'important');
-            mobileBack.style.setProperty('visibility', 'visible', 'important');
-            mobileBack.style.setProperty('opacity', '1', 'important');
-            mobileBack.style.position = 'fixed';
             mobileBack.style.left = '14px';
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
-            mobileBack.style.pointerEvents = 'auto';
             mobileBack.style.zIndex = '20001';
         }
     } else {
@@ -3699,33 +3889,22 @@ function hideIndexFolderList() {
 function selectIndexFolder(folderPath, folderName) {
     selectedIndexFolder = folderPath;
     
-    // Mobile: ensure back button stays fixed on top
+    // Mobile: show back button directly — do NOT make categoryContent overlay visible
+    // (it would intercept all touch events, breaking scroll in selection mode)
     if (isMobileDevice()) {
-        const categoryContent = document.getElementById('mobileCategoryContent');
-        if (categoryContent) {
-            categoryContent.classList.add('visible');
-            categoryContent.style.pointerEvents = 'auto';
-            categoryContent.style.visibility = 'visible';
-            categoryContent.style.opacity = '1';
-            categoryContent.style.background = 'transparent';
-        }
+        showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.display = 'flex';
-            mobileBack.style.visibility = 'visible';
-            mobileBack.style.opacity = '1';
-            mobileBack.style.position = 'fixed';
             mobileBack.style.left = '14px';
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
             mobileBack.style.backgroundColor = 'transparent';
-            mobileBack.style.pointerEvents = 'auto';
-            mobileBack.style.zIndex = '20000';
+            mobileBack.style.zIndex = '20001';
         }
     }
-    
+
     // Fade out other folder items
     const container = document.getElementById('indexFolderList');
     if (container) {
@@ -3772,6 +3951,8 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
     alignedFolderPath = folderPath;
     
     if (isMobileDevice()) {
+        // Restore canvas opacity (may have been dimmed to 0.05 by folder list)
+        if (canvas) canvas.style.opacity = '';
         // Mobile: align in a simple vertical column (10% left padding, 60% width), non-interactive
     folderPoints.forEach(p => {
         p.isAligned = true;
@@ -3814,19 +3995,15 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
 
     // Mobile: force back button visible/top in selection mode
     if (isMobileDevice()) {
+        showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.display = 'flex';
-            mobileBack.style.visibility = 'visible';
-            mobileBack.style.opacity = '1';
-            mobileBack.style.position = 'fixed';
             mobileBack.style.left = '14px';
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
             mobileBack.style.backgroundColor = 'transparent';
-            mobileBack.style.pointerEvents = 'auto';
             mobileBack.style.zIndex = '20000';
         }
     } else {
@@ -3864,13 +4041,13 @@ function exitIndexMode() {
             contentInner.style.visibility = 'hidden';
             contentInner.style.opacity = '0';
         }
+        hideMobileBackButton();
     }
-    
+
     // Restore all images
     points.forEach(p => {
         p.targetOpacity = 1.0;
         p.isInactive = false;
-        p.isFiltered = false;
     });
     
     // Reset camera
@@ -3931,6 +4108,13 @@ function returnToFolderSelection() {
 }
 
 function clearFilter() {
+    // Clear desktop toggle filters if any are active
+    if (activeTags.size > 0) {
+        activeTags.clear();
+        applyTagFilters();
+        updateFilterButtons();
+    }
+
     // If in index mode, handle that instead
     if (isIndexMode) {
         if (selectedIndexFolder !== null) {
@@ -3942,92 +4126,17 @@ function clearFilter() {
         }
         return;
     }
-    
-    if (!isFilterMode) return;
-    
-    // Hide project about text
-    hideProjectAboutText();
-    
-    currentFilterTag = null;
-    isFilterMode = false;
-    
-    // Restore all points to original positions
-    filteredImages.forEach(point => {
-        point.isFiltered = false;
-        point.targetX = point.originalBaseX;
-        point.targetY = point.originalBaseY;
-        point.targetSize = point.layer === 'layer_1' ? baseEmojiSize : baseEmojiSize * layer2SizeMultiplier;
-        point.targetOpacity = 1.0;
-        point.startX = point.currentAlignedX;
-        point.startY = point.currentAlignedY;
-        point.startSize = point.currentSize;
-        point.alignmentStartTime = performance.now();
-    });
-    
-    filteredImages = [];
-    
-    // Restore opacity for all images and reset inactive flag
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-        p.isInactive = false; // Reset inactive flag
-    });
-    
-    // Reset camera
-    currentZoomIndex = initialZoomIndex;
-    startZoomTransition();
-    targetCameraPanX = initialCameraPanX;
-    targetCameraPanY = initialCameraPanY;
-    cameraPanX = initialCameraPanX;
-    cameraPanY = initialCameraPanY;
-    
-    updateFilterButtons();
-    updateBackButtonVisibility();
-}
-
-function handleFilteredImageClick(clickedPoint) {
-    if (!isFilterMode || !clickedPoint.isFiltered) return;
-    
-    const folderPath = clickedPoint.filteredFolder || normalizeFolderPathFromImagePath(clickedPoint.imagePath);
-    const folderPointsF = points.filter((p) => {
-        const pFolder = p.folderPath || normalizeFolderPathFromImagePath(p.imagePath);
-        return pFolder === folderPath;
-    });
-    
-    if (folderPointsF.length === 0 && !imagePaths.some((path) => normalizeFolderPathFromImagePath(path) === folderPath)) return;
-    
-    // Clear current filter and align folder images
-    clearFilter();
-    
-    // Align folder images (desktop horizontal layout; relayouts as images load)
-    selectionFocusPointForPhase2 = clickedPoint; // Phase 2: pan to clicked image
-    alignedEmojiIndex = clickedPoint.imageIndex ?? folderPointsF[0]?.emojiIndex ?? 1;
-    alignedEmojis = mergeFolderImagesWithAllPaths(folderPath, folderPointsF);
-    alignedFolderPath = folderPath;
-    layoutAlignedEmojisDesktop(true);
-    
-    // Set opacity for non-selected images (group by folder)
-    const clickedFolderForAlignment = clickedPoint.folderPath || clickedPoint.imagePath.substring(0, clickedPoint.imagePath.lastIndexOf('/'));
-    points.forEach(p => {
-        const pFolder = p.folderPath || p.imagePath.substring(0, p.imagePath.lastIndexOf('/'));
-        if (pFolder !== clickedFolderForAlignment) {
-            p.targetOpacity = 0.0;
-        } else {
-            p.targetOpacity = 1.0;
-        }
-    });
-    
-    updateBackButtonVisibility();
 }
 
 function updateFilterButtons() {
-    const buttons = document.querySelectorAll('.filter-button');
-    buttons.forEach(btn => {
-        if (btn.id === 'weAreButton') return;
+    document.querySelectorAll('.filter-button[data-tag]').forEach(btn => {
         const tag = btn.getAttribute('data-tag');
-        if (tag === currentFilterTag) {
+        if (activeTags.has(tag)) {
             btn.classList.add('active');
+            btn.style.top = '5px';
         } else {
             btn.classList.remove('active');
+            btn.style.top = '0px';
         }
     });
 }
@@ -4107,6 +4216,10 @@ function positionFilterButtons() {
         btn.style.left = `${currentX}px`;
         btn.style.position = 'absolute';
         btn.style.transform = 'translateX(0)';
+        // Preserve active slide (5px) on resize, otherwise reset to baseline
+        if (btn.getAttribute('data-tag')) {
+            btn.style.top = activeTags.has(btn.getAttribute('data-tag')) ? '5px' : '0px';
+        }
         
         // Measure button text width and add one space for next button
         const textWidth = tempCtx.measureText(btn.textContent).width * scale;
@@ -4122,8 +4235,9 @@ function positionFilterButtons() {
         const separatorPadding = 10 * scale;
         // Position we are button so that total spacing (3 spaces + 8 dashes + 3 spaces) fits between it and stage design
         const weAreLeft = stageDesignLeft - scaledSpacingWidth - weAreTextWidth - separatorPadding;
+        _weAreBtnExploreLeft = weAreLeft; // cache for transition animation
         weAreBtn.style.left = `${weAreLeft}px`;
-        weAreBtn.style.position = 'absolute';
+        weAreBtn.style.position = 'fixed';
         weAreBtn.style.right = 'auto';
         
         // Create separator element with 3 spaces + 8 dashes + 3 spaces
@@ -4149,119 +4263,59 @@ function positionFilterButtons() {
 
 // Show "We are" about text
 function showWeAreAbout() {
-    // Clear hover state first to prevent image zoom
     clearHoverState();
-    
-    // Hide project about and selection nav when entering we are
-    hideProjectAboutText();
-    hideSelectionNavButtons();
-    
-    // Clear any existing filter/alignment/connection first
-    if (isFilterMode) {
-        clearFilter();
-    }
-    if (alignedEmojiIndex !== null) {
-        unalignEmojis();
-    }
-    if (isConnectionMode) {
-        exitConnectionMode();
-    }
-    
-    // If coming from index mode (folder list), hide it and exit index state so only we are text is visible
-    if (isIndexMode) {
-        hideIndexFolderList();
-        isIndexMode = false;
-        indexModeTag = null;
-        indexModeFolders = [];
-        selectedIndexFolder = null;
-        currentFilterTag = null;
-        if (isMobileDevice()) {
-            setMobileNavVisibility(false);
-        }
-    }
-    
-    // Fade out all images and make everything inactive until another action (back or menu click)
-    points.forEach(p => {
-        p.targetOpacity = 0.0;
-        p.isInactive = true;
-    });
-    
     isWeAreMode = true;
-    
-    // Display about text from embedded constant
-    const aboutTextEl = document.getElementById('aboutText');
+
+    const overlay = document.getElementById('aboutOverlay');
+    const panel = document.getElementById('aboutPanel');
+    if (!overlay || !panel) return;
+
+    // Fill panel with about text
     const aboutContent = getAboutText();
-    if (aboutTextEl && aboutContent) {
-        // Format text: preserve line breaks
-        aboutTextEl.innerHTML = aboutContent.split('\n').map(line => {
-            const t = line.trim();
-            if (t === '') return '<br>';
-            if (t.startsWith('<')) return t;
-            return `<p>${line}</p>`;
-        }).join('');
-        aboutTextEl.style.display = 'block';
-        const weAreBtn = document.getElementById('weAreButton');
-        if (weAreBtn) {
-            const rect = weAreBtn.getBoundingClientRect();
-            aboutTextEl.style.left = `${rect.left}px`;
-        }
-        aboutTextEl.style.opacity = '0';
-        // Fade in after images fade out (1 second)
-        setTimeout(() => {
-            aboutTextEl.style.opacity = '1';
-        }, 1000);
-    } else {
-        console.error('About text not available or element not found');
-    }
-    
-    // Show back button
+    panel.innerHTML = (aboutContent || '').split('\n').map(line => {
+        const t = line.trim();
+        if (t === '') return '';
+        if (t.startsWith('<')) return t;
+        return `<p>${line}</p>`;
+    }).filter(Boolean).join('');
+
+    // Wire email links to mailto
+    panel.querySelectorAll('.about-contact-link').forEach(link => {
+        link.style.cursor = 'pointer';
+        link.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const email = link.textContent.trim();
+            window.location.href = 'mailto:' + email;
+        });
+    });
+
+    // Stop clicks inside panel from closing the overlay
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    // Click anywhere outside panel closes it
+    overlay.addEventListener('click', clearWeAreMode, { once: true });
+
+    // Show with fade
+    overlay.style.display = 'block';
+    panel.style.opacity = '0';
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => { panel.style.opacity = '1'; });
+    });
+
     updateBackButtonVisibility();
 }
 
-// Clear "We are" mode
-/**
- * Clears "We are" mode, restoring normal image visibility and resetting inactive flags.
- * Hides the about text overlay and restores all images to full opacity.
- */
 function clearWeAreMode() {
     if (!isWeAreMode) return;
-    
-    // Hide project about text
-    hideProjectAboutText();
-    
     isWeAreMode = false;
-    
-    const aboutTextEl = document.getElementById('aboutText');
-    if (aboutTextEl) {
-        aboutTextEl.style.opacity = '0';
-        setTimeout(() => {
-            aboutTextEl.style.display = 'none';
-        }, 500);
+
+    const overlay = document.getElementById('aboutOverlay');
+    const panel = document.getElementById('aboutPanel');
+    if (overlay) {
+        if (panel) panel.style.opacity = '0';
+        setTimeout(() => { overlay.style.display = 'none'; }, 250);
     }
-    
-    // Hide mobile category content overlay to restore touch navigation
-    if (isMobileDevice()) {
-        const categoryContent = document.getElementById('mobileCategoryContent');
-        if (categoryContent) {
-            categoryContent.classList.remove('visible');
-            categoryContent.style.pointerEvents = 'none';
-            categoryContent.style.visibility = 'hidden';
-            categoryContent.style.opacity = '0';
-        }
-        const contentInner = document.querySelector('.mobile-category-content-inner');
-        if (contentInner) {
-            contentInner.style.display = 'none';
-            contentInner.style.visibility = 'hidden';
-            contentInner.style.opacity = '0';
-        }
-    }
-    
-    // Restore images opacity and reset inactive flag
-    points.forEach(p => {
-        p.targetOpacity = 1.0;
-        p.isInactive = false; // Reset inactive flag
-    });
-    
+
     updateBackButtonVisibility();
 }
 
@@ -4304,17 +4358,19 @@ function draw() {
         hoverStartTime = 0;
         hoveredConnectedPoints = [];
         hoveredLinesOpacity = 0.0;
-        points.forEach(p => {
-            p.targetOpacity = 1.0;
-            p.isInactive = false;
-        });
+        if (activeTags.size === 0) {
+            points.forEach(p => {
+                p.targetOpacity = 1.0;
+                p.isInactive = false;
+            });
+        }
     }
 
     // MOBILE ONLY: freeze random grid visuals (no opacity/size animations) on home screen
     const isMobileHome = isMobileVersion &&
         currentMobileCategory === null &&
         alignedEmojiIndex === null &&
-        !isFilterMode &&
+        activeTags.size === 0 &&
         !isConnectionMode &&
         !isWeAreMode;
     if (isMobileHome) {
@@ -4505,8 +4561,8 @@ function draw() {
             isZoomTransitioning = false;
             globalZoomLevel = zoomTransitionTargetLevel;
         }
-    } else if (alignedEmojiIndex !== null || isFilterMode || useContinuousZoom || !isZoomTransitioning) {
-        // Smooth gradual zoom interpolation (selection/filter mode, touch pinch zoom, and normal mode with mouse wheel)
+    } else if (alignedEmojiIndex !== null || useContinuousZoom || !isZoomTransitioning) {
+        // Smooth gradual zoom interpolation (selection mode, touch pinch zoom, and normal mode with mouse wheel)
         // Normal mode: when isZoomTransitioning is false, it means we're using smooth zoom from wheel events
         
         // Apply smooth zoom inertia (continue zooming even after wheel stops)
@@ -4693,10 +4749,11 @@ function draw() {
     // Sort points by opacity before drawing: non-selected (low opacity) first, then selected (high opacity)
     // This ensures selected images always appear on top
     // IMPORTANT: For mobile selection mode, ensure random grid (non-aligned) is drawn first, then aligned images
+    const alignedPathSet = new Set((alignedEmojis || []).map(p => p.imagePath));
     const sortedPoints = [...points].sort((a, b) => {
         // Check if points are aligned (in selection mode)
-        const aIsAligned = a.isAligned || (alignedEmojiIndex !== null && alignedEmojis.some(aligned => aligned.imagePath === a.imagePath));
-        const bIsAligned = b.isAligned || (alignedEmojiIndex !== null && alignedEmojis.some(aligned => aligned.imagePath === b.imagePath));
+        const aIsAligned = a.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(a.imagePath));
+        const bIsAligned = b.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(b.imagePath));
         
         // If one is aligned and other is not, draw non-aligned first (random grid behind)
         if (!aIsAligned && bIsAligned) return -1;
@@ -4723,7 +4780,7 @@ function draw() {
         // Use faster fade in when restoring opacity (when mouse leaves)
         let currentOpacitySpeed;
         if (point.targetOpacity === 0.0 && point.isInactive) {
-            if (isMobileVersion && currentMobileCategory && !point.isAligned && !point.isFiltered) {
+            if (isMobileVersion && currentMobileCategory && !point.isAligned) {
                 // Mobile grid fade out: 300ms duration
                 currentOpacitySpeed = MOBILE_GRID_FADE_OUT_SPEED;
             } else if (isIndexMode && selectedIndexFolder === null) {
@@ -4745,7 +4802,7 @@ function draw() {
         }
         
         // Mobile: in selection mode or with category menu open, never draw non-aligned grid (fixes first-time grid staying visible)
-        if (isMobileVersion && !point.isAligned && !point.isFiltered) {
+        if (isMobileVersion && !point.isAligned) {
             if (alignedEmojiIndex !== null) {
                 point.opacity = 0;
                 point.targetOpacity = 0;
@@ -4758,8 +4815,8 @@ function draw() {
             }
         }
         // Skip drawing if opacity effectively 0 (for random grid fade out)
-        if (point.opacity < 0.01 && !point.isAligned && !point.isFiltered) {
-            if (isMobileVersion && alignedEmojiIndex === null && !isFilterMode && !isConnectionMode && currentMobileCategory === null && !isWeAreMode) {
+        if (point.opacity < 0.01 && !point.isAligned) {
+            if (isMobileVersion && alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode && currentMobileCategory === null && !isWeAreMode) {
                 point.opacity = 1.0;
                 point.targetOpacity = 1.0;
             } else {
@@ -4770,7 +4827,7 @@ function draw() {
         let x, y;
         let imageSize;
         
-        if (point.isAligned || point.isFiltered || (point.alignmentStartTime > 0 && !point.isAligned && !point.isFiltered)) {
+        if (point.isAligned || (point.alignmentStartTime > 0 && !point.isAligned)) {
             // Time-based smooth animation with logarithmic easing (1.2 seconds duration)
             const elapsed = currentTime - point.alignmentStartTime; // Use cached time
             const progress = Math.min(elapsed / alignmentAnimationDuration, 1.0);
@@ -4783,8 +4840,8 @@ function draw() {
             point.currentAlignedY = point.startY + (point.targetY - point.startY) * easeProgress;
             point.currentSize = point.startSize + (point.targetSize - point.startSize) * easeProgress;
             
-            // If aligned or filtered, use target position; otherwise transitioning back
-            if (point.isAligned || point.isFiltered) {
+            // If aligned, use target position; otherwise transitioning back
+            if (point.isAligned) {
                 x = point.currentAlignedX;
                 y = point.currentAlignedY;
                 imageSize = point.currentSize;
@@ -4798,7 +4855,6 @@ function draw() {
                     point.alignmentStartTime = 0;
                     point.currentAlignedX = point.originalBaseX;
                     point.currentAlignedY = point.originalBaseY;
-                    point.isFiltered = false;
                 }
             }
         } else {
@@ -4833,9 +4889,9 @@ function draw() {
                         exitConnectionMode();
                     }
                     
-                    // Restore opacity for all images ONLY if not in selection/filter/connection mode
-                    // In selection/filter/connection mode, opacity should remain as set by selection
-                    if (alignedEmojiIndex === null && !isFilterMode && !isConnectionMode) {
+                    // Restore opacity for all images ONLY if not in selection/connection mode
+                    // In selection/connection mode, opacity should remain as set by selection
+                    if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
                         points.forEach(p => {
                             p.targetOpacity = 1.0;
                         });
@@ -4854,8 +4910,8 @@ function draw() {
                         hoveredConnectedPoints = points.filter(p => getPointFolder(p) === hoveredFolder);
                         hoveredConnectedPoints.sort((a, b) => a.originalBaseX - b.originalBaseX);
                     }
-                    // Don't apply fade/connection-mode logic if already in selection/filter/connection mode
-                    if (alignedEmojiIndex === null && !isFilterMode && !isConnectionMode) {
+                    // Don't apply fade/connection-mode logic if already in selection/connection mode
+                    if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
                         const hoverDuration = currentTime - hoverStartTime;
                         const hoverTimeout = (typeof isMobileDevice === 'function' && isMobileDevice()) ? HOVER_FADE_TIMEOUT : HOVER_FADE_TIMEOUT_WEB;
                         if (hoverDuration >= hoverTimeout) {
@@ -4944,8 +5000,8 @@ function draw() {
 
             // Animated GIF: canvas 2d only ever paints the first frame (HTML spec). Selection/filter uses DOM <img> clones.
             const isGifHtml = shouldKeepHtmlImageForCanvas(point.imagePath) && img.nodeName === 'IMG';
-            const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedEmojis.some((a) => a && a.imagePath === point.imagePath));
-            const useGifDomOverlay = isGifHtml && (isSelectionRowImage || point.isFiltered || selectionAnimationPhase !== 0);
+            const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(point.imagePath));
+            const useGifDomOverlay = isGifHtml && (isSelectionRowImage || selectionAnimationPhase !== 0);
             
             // Infinite carousel: draw aligned images in three positions (left copy, main, right copy)
             const drawOffsets = (point.isAligned && !isMobileDevice() && alignedRowTotalWidthWorld > 0)
@@ -4980,7 +5036,34 @@ function draw() {
             }
         }
     });
-    
+
+    // Draw extras: images in alignedEmojis that are NOT in points[] (images not picked for the random grid)
+    // The main sortedPoints loop skips them; we draw and animate them here.
+    if (isMobile && alignedEmojiIndex !== null && alignedEmojis && alignedEmojis.length > 0) {
+        const inPoints = new Set(points.map(p => p.imagePath));
+        alignedEmojis.forEach(point => {
+            if (inPoints.has(point.imagePath)) return; // already drawn by main loop
+            // Tick animation (same easing as main loop)
+            if (point.alignmentStartTime > 0) {
+                const elapsed = currentTime - point.alignmentStartTime;
+                const progress = Math.min(elapsed / alignmentAnimationDuration, 1.0);
+                const ep = easeOutLog(progress);
+                point.currentAlignedX = point.startX + (point.targetX - point.startX) * ep;
+                point.currentAlignedY = point.startY + (point.targetY - point.startY) * ep;
+                point.currentSize = point.startSize + (point.targetSize - point.startSize) * ep;
+                if (progress >= 1.0) point.alignmentStartTime = 0;
+            }
+            const imageData = imageCache[point.imagePath];
+            const img = imageData ? (imageData.img || imageData.thumb) : null;
+            if (!img || !imageData || imageData.error) return;
+            const dims = calculateImageDrawDimensions(point, imageData, point.currentSize);
+            const halfW = dims.width / 2;
+            const halfH = dims.height / 2;
+            ctx.globalAlpha = 1.0;
+            try { ctx.drawImage(img, point.currentAlignedX - halfW, point.currentAlignedY - halfH, dims.width, dims.height); } catch (_) {}
+        });
+    }
+
     // Auto-hover connection mode exit check: if mouse is not over any connected point, exit
     if (isConnectionMode && !isConnectionModeClicked && autoHoverTriggerPoint !== null) {
         // Check if mouse is over ANY connected point
@@ -5002,10 +5085,12 @@ function draw() {
             hoverStartTime = 0;
             hoveredConnectedPoints = [];
             hoveredLinesOpacity = 0.0;
-            // Restore opacity for all images
-            points.forEach(p => {
-                p.targetOpacity = 1.0;
-            });
+            // Restore opacity — respect active tag filters
+            if (activeTags.size > 0) {
+                applyTagFilters();
+            } else {
+                points.forEach(p => { p.targetOpacity = 1.0; });
+            }
         }
     }
     
@@ -5182,21 +5267,25 @@ function updateBackButtonVisibility() {
         if (!cachedBackButton) return;
     }
     
-    // Show back button when images are aligned, filtered, in connection mode, in "We are" mode, in index mode, or when mobile category content is open
-    if (alignedEmojiIndex !== null || isFilterMode || isWeAreMode || isConnectionMode || isIndexMode || (isMobileVersion && currentMobileCategory !== null)) {
+    // Show back button when: images aligned, in about mode, in connection mode, in index mode, mobile category open
+    // (desktop toggle filter no longer uses a back button)
+    if (alignedEmojiIndex !== null || isWeAreMode || isConnectionMode || isIndexMode || (isMobileVersion && currentMobileCategory !== null)) {
         cachedBackButton.style.display = 'flex';
         cachedBackButton.style.visibility = 'visible';
         cachedBackButton.style.opacity = '1';
-        // Force position for mobile - ensure it's at bottom right
         if (isMobileDevice()) {
             cachedBackButton.style.top = 'auto';
             cachedBackButton.style.bottom = '20px';
             cachedBackButton.style.right = '20px';
             cachedBackButton.style.left = 'auto';
             cachedBackButton.style.zIndex = '10000';
+        } else {
+            // Lift above about overlay when in about mode so back button is visible and clickable
+            cachedBackButton.style.zIndex = isWeAreMode ? '2100' : '';
         }
     } else {
         cachedBackButton.style.display = 'none';
+        cachedBackButton.style.zIndex = '';
     }
 }
 
@@ -5245,6 +5334,8 @@ function handleDeviceOrientation(e) {
 
 // Request device orientation permission and setup handler
 function setupDeviceOrientation() {
+    if (setupDeviceOrientation._initialized) return;
+    setupDeviceOrientation._initialized = true;
     // Only setup on mobile devices
     if (!isMobileDevice()) return;
     
@@ -5317,9 +5408,52 @@ function initMobileHomepageNav() {
     // Start checking after a short delay to allow loading screen to start fading
     setTimeout(showMobileNav, 100);
     
-    // Setup navigation label clicks
+    // Setup navigation label clicks — drag on a label forwards pan to canvas; tap fires category select
     navLabels.forEach(label => {
+        let _lStartX = 0, _lStartY = 0, _lDragging = false;
+
+        label.addEventListener('touchstart', (e) => {
+            if (!isMobileVersion || currentMobileCategory !== null) return;
+            _lStartX = e.touches[0].clientX;
+            _lStartY = e.touches[0].clientY;
+            _lDragging = false;
+            const rect = getCanvasRect();
+            lastTouchX = e.touches[0].clientX - rect.left;
+            lastTouchY = e.touches[0].clientY - rect.top;
+            lastTouchTime = performance.now();
+        }, { passive: true });
+
+        label.addEventListener('touchmove', (e) => {
+            if (!isMobileVersion || currentMobileCategory !== null) return;
+            const dx = e.touches[0].clientX - _lStartX;
+            const dy = e.touches[0].clientY - _lStartY;
+            if (!_lDragging && Math.sqrt(dx * dx + dy * dy) > 6) {
+                _lDragging = true;
+            }
+            if (_lDragging) {
+                e.preventDefault();
+                const rect = getCanvasRect();
+                const touchX = e.touches[0].clientX - rect.left;
+                const touchY = e.touches[0].clientY - rect.top;
+                const now = performance.now();
+                const dt = Math.max(16, now - lastTouchTime);
+                const dX = touchX - lastTouchX;
+                const dY = touchY - lastTouchY;
+                targetCameraPanX += dX;
+                targetCameraPanY += dY;
+                cameraPanX = targetCameraPanX;
+                cameraPanY = targetCameraPanY;
+                panVelocityX = dX / dt;
+                panVelocityY = dY / dt;
+                lastTouchX = touchX;
+                lastTouchY = touchY;
+                lastTouchTime = now;
+                lastInteractionTime = now;
+            }
+        }, { passive: false });
+
         label.addEventListener('click', (e) => {
+            if (_lDragging) { _lDragging = false; return; }
             const category = label.getAttribute('data-category');
             handleMobileCategorySelect(category);
         });
@@ -5346,32 +5480,6 @@ function getMobileNavLayoutSize() {
 function calculateLinesIntersection(labels) {
     const { width, height } = getMobileNavLayoutSize();
     return { x: width / 2, y: height / 2 };
-}
-
-// Calculate intersection point of two line segments
-function lineIntersection(x1, y1, x2, y2, x3, y3, x4, y4) {
-    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(denom) < 0.001) {
-        // Lines are parallel, use center of screen as fallback
-        const { width, height } = getViewportSize();
-        return { x: width / 2, y: height / 2 };
-    }
-    
-    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
-    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
-    
-    // Check if intersection is within both line segments
-    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-        return {
-            x: x1 + t * (x2 - x1),
-            y: y1 + t * (y2 - y1)
-        };
-    }
-    
-    // If not within segments, extend lines and find intersection
-    const x = x1 + t * (x2 - x1);
-    const y = y1 + t * (y2 - y1);
-    return { x, y };
 }
 
 // Draw navigation lines from center intersection to labels
@@ -5418,18 +5526,24 @@ function drawMobileNavLines(svg, labels) {
         const labelX = rect.left + rect.width / 2;
         const labelY = rect.top + rect.height / 2;
         
-        // Create line from intersection to label
+        // Create line from intersection to label, stopping 20px before label center
         const dx = labelX - centerX;
         const dy = labelY - centerY;
-        if (dx * dx + dy * dy < 64 * 64) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 64) {
             return;
         }
+        const GAP = 20;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        const x2 = labelX - ux * GAP;
+        const y2 = labelY - uy * GAP;
 
         const line = document.createElementNS(svgNS, 'line');
         line.setAttribute('x1', centerX);
         line.setAttribute('y1', centerY);
-        line.setAttribute('x2', labelX);
-        line.setAttribute('y2', labelY);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
         line.setAttribute('stroke', '#fff');
         line.setAttribute('stroke-width', '0.5');
         line.setAttribute('opacity', '0.75'); // +25% vs 0.6 (mobile home only)
@@ -5466,7 +5580,7 @@ function handleMobileCategorySelect(category) {
     
     // Fade out all points (images) in random grid over 0.25s
     points.forEach(point => {
-        if (!point.isAligned && !point.isFiltered) {
+        if (!point.isAligned) {
             point.targetOpacity = 0.0;
         }
     });
@@ -5479,20 +5593,52 @@ function handleMobileCategorySelect(category) {
         if (category === 'we-are') {
             isWeAreMode = true; // Set we are mode flag
             showMobileCategoryContent(category);
+            showMobileBackButton();
             const mobileBack = document.getElementById('mobileCategoryBack');
             if (mobileBack) {
-                mobileBack.style.display = 'flex';
-                mobileBack.style.visibility = 'visible';
-                mobileBack.style.opacity = '1';
-                mobileBack.style.position = 'fixed';
                 mobileBack.style.left = '14px';
                 mobileBack.style.right = '14px';
                 mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
                 mobileBack.style.top = 'auto';
                 mobileBack.style.background = 'transparent';
-                mobileBack.style.pointerEvents = 'auto';
                 mobileBack.style.zIndex = '20000';
             }
+            return;
+        }
+        // "index" — show full project list (all folders, no tag filter)
+        if (category === 'index') {
+            const allFolders = getTopLevelFolders().map(f => ({ path: f, name: f }));
+            isIndexMode = true;
+            indexModeTag = null;
+            indexModeFolders = allFolders;
+            selectedIndexFolder = null;
+            points.forEach(p => { p.targetOpacity = 0.0; p.isInactive = true; p.isHovered = false; });
+            stopMobileAutoConnections();
+            mobileAutoLines = [];
+            setMobileNavVisibility(false);
+            // Show mobileCategoryContent container (back button lives inside it)
+            const categoryContent = document.getElementById('mobileCategoryContent');
+            if (categoryContent) {
+                categoryContent.classList.add('visible');
+                categoryContent.style.visibility = 'visible';
+                categoryContent.style.opacity = '1';
+                categoryContent.style.pointerEvents = 'none';
+                categoryContent.style.background = 'transparent';
+            }
+            const contentInner = document.querySelector('.mobile-category-content-inner');
+            if (contentInner) { contentInner.style.display = 'none'; contentInner.style.visibility = 'hidden'; }
+            showMobileBackButton();
+            const mobileBack = document.getElementById('mobileCategoryBack');
+            if (mobileBack) {
+                mobileBack.style.left = '14px';
+                mobileBack.style.right = '14px';
+                mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+                mobileBack.style.top = 'auto';
+                mobileBack.style.background = 'transparent';
+                mobileBack.style.zIndex = '20001';
+            }
+            showIndexFolderList(allFolders);
+            updateBackButtonVisibility();
             return;
         }
         const categoryContent = document.getElementById('mobileCategoryContent');
@@ -5502,8 +5648,17 @@ function handleMobileCategorySelect(category) {
             categoryContent.style.visibility = 'hidden';
             categoryContent.style.opacity = '0';
         }
-        const tag = category === 'spatial' ? 'spatial' : category;
+        // "materiality" maps to the "concept" internal tag
+        const tag = category === 'materiality' ? 'concept' : category === 'spatial' ? 'spatial' : category;
         filterByTag(tag);
+        // Always show back button for any tag category on mobile (filterByTag may return early if no folders)
+        showMobileBackButton();
+        const mobileBackTag = document.getElementById('mobileCategoryBack');
+        if (mobileBackTag) {
+            mobileBackTag.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+            mobileBackTag.style.top = 'auto';
+            mobileBackTag.style.zIndex = '20001';
+        }
         updateBackButtonVisibility();
     } else {
         // Desktop: preserve existing behaviour
@@ -5556,9 +5711,9 @@ function showMobileCategoryContent(category) {
     const categoryLabels = {
         'we-are': '',
         'stage': 'visual research',
-        'install': 'explore',
-        'tech': 'space n sound',
-        'concept': 'make',
+        'install': 'spatial design',
+        'tech': 'sonic core',
+        'concept': 'materiality',
         'spatial': 'perform'
     };
     
@@ -5587,9 +5742,7 @@ function showMobileCategoryContent(category) {
         const tag = category;
         filterByTag(tag);
         
-        // Show filtered images info
-        const filteredCount = filteredImages ? filteredImages.length : 0;
-        categoryBody.innerHTML = `<div style="line-height: 1.6; font-size: 14px;">${filteredCount} projects</div>`;
+        categoryBody.innerHTML = `<div style="line-height: 1.6; font-size: 14px;">projects</div>`;
     }
     
     // Show category content with fade in
@@ -5600,6 +5753,9 @@ function showMobileCategoryContent(category) {
 
 // Handle mobile category back
 function handleMobileCategoryBack() {
+    // Restore canvas opacity if it was dimmed by showMobileCategoryList
+    if (canvas) canvas.style.opacity = '';
+
     // If in "we are" mode, clear it (fade out about text in 0.25s)
     if (isWeAreMode) {
         clearWeAreMode();
@@ -5625,19 +5781,15 @@ function handleMobileCategoryBack() {
         // Show navigation again
         setMobileNavVisibility(true);
         
-        // Hide the back button on main screen
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) {
-            mobileBack.style.display = 'none';
-        }
-        
+        hideMobileBackButton();
+
         updateBackButtonVisibility();
         updateMobileGridPointerState();
         startMobileAutoConnections();
         requestAnimationFrame(function () { updateMobileGridPointerState(); });
         return;
     }
-    
+
     // If in image selection mode (aligned images), return to folder list
     if (alignedEmojiIndex !== null && selectedIndexFolder !== null) {
         returnToFolderSelection();
@@ -5678,19 +5830,15 @@ function handleMobileCategoryBack() {
             point.isInactive = false;
         });
         
-        // Hide the back button on main screen
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) {
-            mobileBack.style.display = 'none';
-        }
-        
+        hideMobileBackButton();
+
         updateBackButtonVisibility();
         updateMobileGridPointerState();
         startMobileAutoConnections();
         requestAnimationFrame(function () { updateMobileGridPointerState(); });
         return;
     }
-    
+
     currentMobileCategory = null;
     
     // Reset aligned state and restore originals (instant jump back)
@@ -5703,43 +5851,529 @@ function handleMobileCategoryBack() {
         categoryContent.style.pointerEvents = 'none';
         categoryContent.style.visibility = 'hidden';
         categoryContent.style.opacity = '0';
+        categoryContent.style.background = 'transparent'; // reset from showMobileCategoryIndex
     }
-    
+
     // Fade in random grid (canvas)
     const canvasEl = document.getElementById('canvas');
     if (canvasEl) {
         canvasEl.classList.remove('mobile-grid-fade-out');
     }
-    
+
     // Show navigation again
     setMobileNavVisibility(true);
     
     // Fade in all points in random grid
     points.forEach(point => {
-        if (!point.isAligned && !point.isFiltered) {
+        if (!point.isAligned) {
             point.targetOpacity = 1.0;
         }
     });
-    
-    // Clear filter if active
-    if (isFilterMode) {
-        clearFilter();
-    }
-    
+
     updateBackButtonVisibility();
     updateMobileGridPointerState();
     startMobileAutoConnections();
     
-    // Hide the back button on main screen
-    const mobileBack = document.getElementById('mobileCategoryBack');
-    if (mobileBack) {
-        mobileBack.style.display = 'none';
-    }
-    
+    hideMobileBackButton();
+
     // Re-apply canvas pointer-events on next frame so touch/pan works after back
     requestAnimationFrame(function () {
         updateMobileGridPointerState();
     });
+}
+
+// ——— Project Index ———
+
+const HASHTAG_DISPLAY = { stage: '#vis', installation: '#exp', concept: '#mat', tech: '#snd', spatial: '#pf' };
+
+// Collect unique top-level Artsy folders from imagePaths (exclude hidden/sub)
+function getTopLevelFolders() {
+    const seen = new Set();
+    const result = [];
+    imagePaths.forEach(p => {
+        const topLevel = p.includes('/') ? p.split('/')[0] : null;
+        if (!topLevel || topLevel.startsWith('0_') || topLevel.startsWith('thumb')) return;
+        if (!seen.has(topLevel)) {
+            seen.add(topLevel);
+            result.push(topLevel);
+        }
+    });
+    return result;
+}
+
+// Derive display hashtags for a folder name
+function getFolderDisplayTags(folderName) {
+    const internalTags = getFolderTags(folderName);
+    return internalTags.map(t => HASHTAG_DISPLAY[t] || t).filter(Boolean);
+}
+
+// Async: fetch about.txt for all folders and cache in window.__PROJECT_META__
+function prefetchProjectMeta() {
+    if (!window.__PROJECT_META__) window.__PROJECT_META__ = {};
+    const origin = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    getTopLevelFolders().forEach(folder => {
+        if (window.__PROJECT_META__[folder] !== undefined) return;
+        window.__PROJECT_META__[folder] = null; // mark in-flight
+        const encodedFolder = folder.split('/').map(s => encodeURIComponent(s)).join('/');
+        fetch(origin + pathPrefix + '/img/' + encodedFolder + '/about.txt')
+            .then(r => r.ok ? r.text() : null)
+            .catch(() => null)
+            .then(text => {
+                window.__PROJECT_META__[folder] = parseProjectMeta(folder, text);
+            });
+    });
+}
+
+function stripParens(str) {
+    // Strip wrapping parens: "(foo)" → "foo", "()" → ""
+    return (str || '').replace(/^\s*\(([^)]*)\)\s*$/, '$1').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+}
+
+function parseProjectMeta(folderName, text) {
+    const cleanName = folderName.replace(/\s*#.*$/, '').trim();
+    const tags = getFolderDisplayTags(folderName);
+    let name = cleanName;
+    let year = null;
+    let projectType = null;
+    if (text) {
+        const nm = text.match(/^name:\s*(.+)/mi);
+        if (nm) {
+            const raw = stripParens(nm[1].trim());
+            name = raw || cleanName;
+        }
+        const yr = text.match(/^year:\s*(.+)/mi);
+        if (yr) {
+            const nums = yr[1].match(/\d{4}/g);
+            if (nums) year = parseInt(nums[nums.length - 1]);
+        }
+        const pt = text.match(/^project type:\s*(.+)/mi);
+        if (pt) {
+            const raw = stripParens(pt[1].trim());
+            if (raw) projectType = raw.toLowerCase();
+        }
+    }
+    // First non-poster image in this folder for preview
+    const previewPath = imagePaths.find(p => p.startsWith(folderName + '/') && !p.endsWith('_poster.jpg') && !p.endsWith('.gif'));
+    return { name, year, tags, projectType, folderName, previewPath: previewPath || null };
+}
+
+// Cache of #weAreButton's explore-mode left position (set by positionFilterButtons)
+let _weAreBtnExploreLeft = 0;
+
+// Slide #weAreButton to its index-mode position (above project names column)
+function _weAreBtnToIndexPos() {
+    const btn = document.getElementById('weAreButton');
+    if (!btn || isMobileDevice()) return;
+    btn.style.transition = ''; // use CSS default: left 0.5s ease-out
+    btn.style.left = '50px';
+}
+
+// Animate #weAreButton from current position back to its explore position
+function _weAreBtnToExplorePos() {
+    const btn = document.getElementById('weAreButton');
+    if (!btn || isMobileDevice()) return;
+    // snapshot current pixel left so transition starts from there
+    const currentLeft = btn.getBoundingClientRect().left;
+    btn.style.transition = 'none';
+    btn.style.left = currentLeft + 'px';
+    // force reflow so transition fires
+    void btn.offsetWidth;
+    btn.style.transition = 'left 0.5s ease-out';
+    btn.style.left = (_weAreBtnExploreLeft || window.innerWidth * 0.25) + 'px';
+}
+
+function showProjectIndex() {
+    const el = document.getElementById('projectIndex');
+    if (el) el.classList.add('visible');
+    const exploreIndexBtn = document.getElementById('exploreIndexBtn');
+    if (exploreIndexBtn) exploreIndexBtn.style.display = 'none';
+    // Prep filter buttons at opacity 0 so they can stagger back in on return
+    if (!isMobileDevice()) {
+        document.querySelectorAll('.filter-button:not(#weAreButton)').forEach(btn => {
+            btn.style.opacity = '0';
+            btn.style.transition = 'none';
+        });
+        _weAreBtnToIndexPos();
+    }
+    renderProjectIndex();
+}
+
+function hideProjectIndex() {
+    const el = document.getElementById('projectIndex');
+    if (el) el.classList.remove('visible');
+}
+
+// Animate project index closing, then run callback.
+// slideAboutBtn: if true, simultaneously slides #weAreButton to explore position (index→explore transition).
+//                if false, #weAreButton stays put (e.g. opening about from index keeps it in index position).
+function _closeProjectIndexAnimated(callback, slideAboutBtn) {
+    const el = document.getElementById('projectIndex');
+    if (!el || !el.classList.contains('visible')) {
+        if (callback) callback();
+        return;
+    }
+    el.classList.add('fading-out');
+    if (slideAboutBtn) {
+        _weAreBtnToExplorePos();
+    }
+    setTimeout(() => {
+        el.classList.remove('visible');
+        el.classList.remove('fading-out');
+        if (callback) callback();
+    }, 500);
+}
+
+// Stagger filter buttons back in after index close.
+// Total animation: 1.25s — stagger window 0.25s spread across all items, 1s fade each.
+function _staggerFilterButtonsIn() {
+    // Separator is appended last in DOM but is leftmost visually — put it first
+    const sep  = document.getElementById('dashSeparator');
+    const rest = Array.from(document.querySelectorAll(
+        '#filterButtons .filter-button:not(#weAreButton):not(#backButton):not(#dashSeparator)'
+    ));
+    const items = sep ? [sep, ...rest] : rest;
+    if (!items.length) return;
+
+    const FADE_MS         = 1000;
+    const STAGGER_TOTAL   = 250;  // total spread across all items
+    const stepMs = items.length > 1 ? STAGGER_TOTAL / (items.length - 1) : 0;
+
+    items.forEach((el, i) => {
+        el.style.transition = 'none';
+        el.style.opacity    = '0';
+        setTimeout(() => {
+            el.style.transition = `opacity ${FADE_MS}ms ease-out`;
+            el.style.opacity    = '1';
+            // Clear inline styles once fully faded so CSS :hover works
+            setTimeout(() => {
+                el.style.opacity    = '';
+                el.style.transition = '';
+            }, FADE_MS + 20);
+        }, Math.round(i * stepMs));
+    });
+}
+
+function renderProjectIndex() {
+    const list = document.getElementById('projectIndexList');
+    if (!list) return;
+
+    const folders = getTopLevelFolders();
+    const meta = window.__PROJECT_META__ || {};
+
+    const projects = folders.map(folder => {
+        const m = meta[folder];
+        return (m && m !== null) ? m : parseProjectMeta(folder, null);
+    });
+
+    projects.sort((a, b) => {
+        if (a.year === null && b.year === null) return a.name.localeCompare(b.name);
+        if (a.year === null) return 1;
+        if (b.year === null) return -1;
+        if (b.year !== a.year) return b.year - a.year;
+        return a.name.localeCompare(b.name);
+    });
+
+    const groups = [];
+    let currentYear = undefined;
+    projects.forEach(p => {
+        const y = p.year || 'unknown';
+        if (y !== currentYear) {
+            currentYear = y;
+            groups.push({ year: y, projects: [] });
+        }
+        groups[groups.length - 1].projects.push(p);
+    });
+
+    // Preview image element
+    const previewEl = document.getElementById('projectIndexPreview');
+    const previewImg = document.getElementById('projectIndexPreviewImg');
+
+    list.innerHTML = '';
+
+    // Column header row (once, above first group)
+    const colHeader = document.createElement('div');
+    colHeader.className = 'project-index-col-header';
+    const hdrName = document.createElement('span');
+    hdrName.className = 'project-index-col-hdr-name';
+    const hdrType = document.createElement('span');
+    hdrType.className = 'project-index-col-hdr-type';
+    hdrType.textContent = 'project type';
+    colHeader.appendChild(hdrName);
+    colHeader.appendChild(hdrType);
+    list.appendChild(colHeader);
+
+    const origin = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+
+    groups.forEach(group => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'project-index-year-group';
+
+        const yearEl = document.createElement('div');
+        yearEl.className = 'project-index-year-label';
+        yearEl.textContent = group.year === 'unknown' ? '—' : group.year;
+        groupEl.appendChild(yearEl);
+
+        const divider = document.createElement('div');
+        divider.className = 'project-index-divider';
+        groupEl.appendChild(divider);
+
+        group.projects.forEach(proj => {
+            const row = document.createElement('div');
+            row.className = 'project-index-row';
+            row.dataset.folder = proj.folderName;
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'project-index-name';
+            nameEl.textContent = proj.name.toLowerCase();
+
+            // Right cell: project type (from about.txt) or hashtags as fallback
+            const typeEl = document.createElement('span');
+            typeEl.className = 'project-index-tags';
+            typeEl.textContent = proj.projectType || proj.tags.join(' · ');
+
+            row.appendChild(nameEl);
+            row.appendChild(typeEl);
+
+            // Hover: show preview image
+            if (proj.previewPath) {
+                const encodedPreview = proj.previewPath.split('/').map(s => encodeURIComponent(s)).join('/');
+                const previewSrc = origin + pathPrefix + '/img/' + encodedPreview;
+                row.addEventListener('mouseenter', () => {
+                    if (previewImg) previewImg.src = previewSrc;
+                    if (previewEl) previewEl.classList.add('visible');
+                });
+                row.addEventListener('mouseleave', () => {
+                    if (previewEl) previewEl.classList.remove('visible');
+                });
+            }
+
+            // Click: open dedicated project gallery
+            row.addEventListener('click', () => {
+                showProjectGallery(proj);
+            });
+
+            groupEl.appendChild(row);
+        });
+
+        list.appendChild(groupEl);
+    });
+}
+
+// ——— Gallery state ———
+let _galleryImages = [];
+let _galleryNextIdx = 0;
+let _galleryImgData = [];
+let _gallerySpawnTimer = null;
+let _galleryCurrentProj = null;
+
+const GALLERY_SPAWN_MS = 1200;  // 1.2 s between auto-spawns
+const GALLERY_IS_MOBILE = () => window.innerWidth < 768 || ('ontouchstart' in window);
+
+function showProjectGallery(proj) {
+    hideProjectIndex();
+    clearInterval(_gallerySpawnTimer);
+    _galleryCurrentProj = proj;
+
+    // Text panel
+    const nameEl  = document.getElementById('galleryProjectName');
+    const typeEl  = document.getElementById('galleryProjectType');
+    const fieldsEl = document.getElementById('galleryAboutFields');
+    const moreEl  = document.getElementById('galleryMoreText');
+    if (nameEl)  nameEl.textContent  = (proj.name || proj.folderName).toLowerCase();
+    if (typeEl)  typeEl.textContent  = (proj.projectType || '').toLowerCase();
+    if (fieldsEl) fieldsEl.innerHTML = '';
+    if (moreEl)  moreEl.textContent  = '';
+
+    // Fetch about.txt + more.txt for the text panel
+    _loadGalleryText(proj);
+
+    // Collect images (no poster files)
+    _galleryImages = imagePaths.filter(p =>
+        p.startsWith(proj.folderName + '/') && !p.endsWith('_poster.jpg')
+    );
+    _galleryNextIdx = 0;
+    _galleryImgData = [];
+
+    const area = document.getElementById('galleryImageArea');
+    if (area) area.innerHTML = '';
+
+    const el = document.getElementById('projectGallery');
+    if (el) el.classList.add('visible');
+
+    if (!_galleryImages.length) return;
+
+    // Spawn first image immediately, then every 1.2s until all shown
+    _spawnGalleryImage();
+    _galleryNextIdx = 1;
+    _gallerySpawnTimer = setInterval(() => {
+        if (_galleryNextIdx >= _galleryImages.length) {
+            clearInterval(_gallerySpawnTimer);
+            _gallerySpawnTimer = null;
+            return;
+        }
+        _spawnGalleryImage();
+        _galleryNextIdx++;
+    }, GALLERY_SPAWN_MS);
+}
+
+function hideProjectGallery() {
+    clearInterval(_gallerySpawnTimer);
+    _gallerySpawnTimer = null;
+    _galleryImgData = [];
+    _galleryCurrentProj = null;
+    const el = document.getElementById('projectGallery');
+    if (el) el.classList.remove('visible');
+    const area = document.getElementById('galleryImageArea');
+    if (area) area.innerHTML = '';
+    showProjectIndex();
+}
+
+function _spawnGalleryImage() {
+    const area = document.getElementById('galleryImageArea');
+    if (!area || !_galleryImages.length) return;
+
+    const origin     = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    const imgPath    = _galleryImages[Math.min(_galleryNextIdx, _galleryImages.length - 1)];
+    const encoded    = imgPath.split('/').map(s => encodeURIComponent(s)).join('/');
+    const src        = origin + pathPrefix + '/img/' + encoded;
+
+    const img = document.createElement('img');
+    img.src = src;
+    img.className = 'gallery-spawned-img';
+    img.draggable = false;
+
+    const isMob = GALLERY_IS_MOBILE();
+
+    const zBase = 10 + _galleryImgData.length;
+
+    if (!isMob) {
+        // Desktop: random absolute position within the area
+        const aW = area.offsetWidth  || 600;
+        const aH = area.offsetHeight || 500;
+        const maxX = Math.max(0, aW * 0.46);
+        const maxY = Math.max(0, aH * 0.43);
+        img.style.left   = (Math.random() * maxX) + 'px';
+        img.style.top    = (Math.random() * maxY) + 'px';
+        img.style.zIndex = zBase;
+        img.style.cursor = 'grab';
+        area.appendChild(img);
+        _galleryImgData.push({ el: img });
+    } else {
+        // Mobile: append in flow (CSS handles layout)
+        img.style.zIndex = zBase;
+        area.appendChild(img);
+        _galleryImgData.push({ el: img });
+        setTimeout(() => area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' }), 100);
+    }
+
+    // Drag + click-to-top (desktop only — mobile uses flow layout)
+    if (!isMob) {
+        let _dragStartX = 0, _dragStartY = 0;
+        let _imgStartLeft = 0, _imgStartTop = 0;
+        let _dragged = false;
+
+        const bringToTop = () => {
+            const maxZ = _galleryImgData.reduce((m, d) => Math.max(m, parseInt(d.el.style.zIndex) || 0), 0);
+            img.style.zIndex = maxZ + 1;
+        };
+
+        img.addEventListener('pointerdown', (ev) => {
+            if (ev.button !== 0) return;
+            ev.preventDefault();
+            bringToTop();
+            _dragged = false;
+            _dragStartX = ev.clientX;
+            _dragStartY = ev.clientY;
+            _imgStartLeft = parseFloat(img.style.left) || 0;
+            _imgStartTop  = parseFloat(img.style.top)  || 0;
+            img.setPointerCapture(ev.pointerId);
+            img.style.cursor = 'grabbing';
+        });
+
+        img.addEventListener('pointermove', (ev) => {
+            if (!img.hasPointerCapture(ev.pointerId)) return;
+            const dx = ev.clientX - _dragStartX;
+            const dy = ev.clientY - _dragStartY;
+            if (!_dragged && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) _dragged = true;
+            if (!_dragged) return;
+            img.style.left = (_imgStartLeft + dx) + 'px';
+            img.style.top  = (_imgStartTop  + dy) + 'px';
+        });
+
+        img.addEventListener('pointerup', (ev) => {
+            if (!img.hasPointerCapture(ev.pointerId)) return;
+            img.releasePointerCapture(ev.pointerId);
+            img.style.cursor = 'grab';
+        });
+    }
+
+    // Fade in
+    requestAnimationFrame(() => requestAnimationFrame(() => { img.style.opacity = '1'; }));
+}
+
+// Prev / Next: immediately show previous / next image
+function _galleryPrev() {
+    if (!_galleryImages.length) return;
+    _galleryNextIdx = (_galleryNextIdx - 1 + _galleryImages.length) % _galleryImages.length;
+    _spawnGalleryImage();
+}
+
+function _galleryNext() {
+    if (!_galleryImages.length) return;
+    _galleryNextIdx = (_galleryNextIdx + 1) % _galleryImages.length;
+    _spawnGalleryImage();
+}
+
+function _loadGalleryText(proj) {
+    const origin     = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    const encoded    = proj.folderName.split('/').map(s => encodeURIComponent(s)).join('/');
+    const base       = origin + pathPrefix + '/img/' + encoded;
+
+    fetch(base + '/about.txt')
+        .then(r => r.ok ? r.text() : null).catch(() => null)
+        .then(text => {
+            if (!text) return;
+            const fieldsEl = document.getElementById('galleryAboutFields');
+            if (!fieldsEl) return;
+            fieldsEl.innerHTML = '';
+            const KEYS = ['year', 'location', 'tags'];
+            KEYS.forEach(key => {
+                const m = text.match(new RegExp('^' + key + ':\\s*(.+)', 'mi'));
+                if (!m) return;
+                const val = m[1].trim();
+                if (!val || val === '()') return;
+                const row = document.createElement('div');
+                row.className = 'gallery-about-field';
+                const k = document.createElement('span');
+                k.className = 'gallery-about-key';
+                k.textContent = key;
+                const v = document.createElement('span');
+                v.className = 'gallery-about-val';
+                v.textContent = val.toLowerCase();
+                row.appendChild(k);
+                row.appendChild(v);
+                fieldsEl.appendChild(row);
+            });
+        });
+
+    fetch(base + '/more.txt')
+        .then(r => r.ok ? r.text() : null).catch(() => null)
+        .then(text => {
+            const moreEl = document.getElementById('galleryMoreText');
+            if (moreEl && text && text.trim()) {
+                moreEl.innerHTML = '';
+                text.trim().split(/\r?\n/).forEach(line => {
+                    moreEl.appendChild(makeMoreLineElement(line));
+                });
+                moreEl.style.display = '';
+            } else if (moreEl) {
+                moreEl.style.display = 'none';
+            }
+        });
 }
 
 function runAppInit() {
@@ -5786,8 +6420,6 @@ function runAppInit() {
                 } else {
                     exitIndexMode();
                 }
-            } else if (isFilterMode) {
-                clearFilter();
             } else if (isConnectionMode) {
                 exitConnectionMode();
             } else {
@@ -5805,6 +6437,58 @@ function runAppInit() {
         }, { passive: false });
     }
     
+    // ——— Choice screen + index button handlers ———
+    const choiceExploreBtn = document.getElementById('choiceExplore');
+    if (choiceExploreBtn) {
+        choiceExploreBtn.addEventListener('click', () => enterExploreMode());
+    }
+    const choiceIndexBtn = document.getElementById('choiceIndex');
+    if (choiceIndexBtn) {
+        choiceIndexBtn.addEventListener('click', () => {
+            const li = document.getElementById('loadingIndicator');
+            if (li) {
+                li.classList.add('hidden');
+                setTimeout(() => { if (li.parentNode) li.parentNode.removeChild(li); }, 1000);
+            }
+            showProjectIndex();
+        });
+    }
+    const indexBackBtn = document.getElementById('indexBackBtn');
+    if (indexBackBtn) {
+        indexBackBtn.addEventListener('click', () => {
+            // Animated: fade index out in 0.5s, slide about button, then stagger filter buttons in
+            _closeProjectIndexAnimated(() => {
+                enterExploreMode();
+                _staggerFilterButtonsIn();
+            }, true);
+        });
+    }
+    const galleryBackBtn = document.getElementById('galleryBackBtn');
+    if (galleryBackBtn) {
+        galleryBackBtn.addEventListener('click', () => hideProjectGallery());
+    }
+    const galleryPrevBtn = document.getElementById('galleryPrevBtn');
+    if (galleryPrevBtn) {
+        galleryPrevBtn.addEventListener('click', () => _galleryPrev());
+    }
+    const galleryNextBtn = document.getElementById('galleryNextBtn');
+    if (galleryNextBtn) {
+        galleryNextBtn.addEventListener('click', () => _galleryNext());
+    }
+    const exploreIndexBtn = document.getElementById('exploreIndexBtn');
+    if (exploreIndexBtn) {
+        exploreIndexBtn.addEventListener('click', () => {
+            exploreIndexBtn.style.display = 'none';
+            showProjectIndex();
+        });
+    }
+    // Hide exploreIndexBtn whenever a non-grid state is entered (point 5)
+    function _hideExploreIndexBtn() {
+        const btn = document.getElementById('exploreIndexBtn');
+        if (btn) btn.style.display = 'none';
+    }
+    window._hideExploreIndexBtn = _hideExploreIndexBtn;
+
     // Setup filter buttons (only for desktop)
     if (!isMobileDevice()) {
     positionFilterButtons();
@@ -5814,14 +6498,6 @@ function runAppInit() {
             filterButtonsRaf = requestAnimationFrame(() => {
                 filterButtonsRaf = 0;
         positionFilterButtons();
-        if (isWeAreMode) {
-            const aboutTextEl = document.getElementById('aboutText');
-            const weAreBtn = document.getElementById('weAreButton');
-            if (aboutTextEl && weAreBtn) {
-                const rect = weAreBtn.getBoundingClientRect();
-                aboutTextEl.style.left = `${rect.left}px`;
-            }
-        }
             });
     });
     
@@ -5873,7 +6549,6 @@ function runAppInit() {
         });
         
         if (btn.id === 'weAreButton') {
-            // Handle "we are" button - show about text
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 showWeAreAbout();
@@ -5884,7 +6559,7 @@ function runAppInit() {
             const tag = btn.getAttribute('data-tag');
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                filterByTag(tag);
+                toggleFilterTag(tag);
             });
         }
     });
@@ -5933,6 +6608,9 @@ if (document.readyState === 'loading') {
 } else {
     runAppInit();
 }
+
+// Preload Bandcamp URLs in the background after script loads
+setTimeout(_preloadBandcampUrls, 500);
 
 // ========== About.txt functionality ==========
 
@@ -5994,10 +6672,15 @@ function loadAndDisplayAboutText(folderPath) {
     const aboutPromise = fetch(aboutUrl).then(r => r.ok ? r.text() : Promise.reject(new Error('about')));
     const morePromise = fetch(moreUrl).then(r => r.ok ? r.text() : null).catch(() => null);
     const extraPromise = fetch(extraUrl).then(r => r.ok ? r.text() : null).catch(() => null);
-    Promise.all([aboutPromise, morePromise, extraPromise])
-        .then(([aboutText, moreText, extraText]) => {
+    const bcPromise = fetch(base + '/bandcamp.txt').then(r => r.ok ? r.text() : null).catch(() => null);
+    Promise.all([aboutPromise, morePromise, extraPromise, bcPromise])
+        .then(([aboutText, moreText, extraText, bcText]) => {
             const moreContent = (moreText && moreText.trim()) || (extraText && extraText.trim()) || null;
             parseAndDisplayAboutText(aboutText, moreContent ? (moreContent.trim()) : null);
+            if (bcText && bcText.trim()) {
+                if (!window.__BC_URLS__) window.__BC_URLS__ = {};
+                window.__BC_URLS__[pathWithoutPrefix] = bcText.trim();
+            }
         })
         .catch(() => {
             displayProjectAboutText('~', [], null);
@@ -6201,6 +6884,115 @@ function parseAndDisplayAboutText(text, moreText) {
     displayProjectAboutText(name, aboutLines, moreText || null);
 }
 
+// Build a .more-line div from a text line — URLs become clickable <a> elements.
+// Strips leading >>> markers from URL-only lines.
+// Fetch Bandcamp oEmbed via JSONP (bypasses CORS; Bandcamp supports format=js&callback=).
+// Returns { src, height } for the iframe player, or null on failure.
+function fetchBandcampEmbedSrc(url) {
+    return new Promise(resolve => {
+        const cbName = '__bcOembed_' + Math.random().toString(36).slice(2);
+        let script;
+        const cleanup = () => {
+            delete window[cbName];
+            if (script && script.parentNode) script.parentNode.removeChild(script);
+        };
+        const timer = setTimeout(() => { cleanup(); resolve(null); }, 6000);
+
+        window[cbName] = (data) => {
+            clearTimeout(timer);
+            cleanup();
+            if (!data || !data.html) return resolve(null);
+            const srcMatch = data.html.match(/src="([^"]+)"/);
+            if (!srcMatch) return resolve(null);
+            let src = srcMatch[1];
+            src = src.replace(/bgcol=[a-fA-F0-9]+/, 'bgcol=000000')
+                      .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8')
+                      .replace(/size=large/, 'size=small')
+                      .replace(/size=medium/, 'size=small')
+                      .replace(/artwork=small\//, '')
+                      .replace(/artwork=large\//, '');
+            if (!src.includes('transparent=')) src = src.replace(/\/?$/, '/') + 'transparent=true/';
+            resolve({ src, height: 42 });
+        };
+
+        script = document.createElement('script');
+        script.onerror = () => { clearTimeout(timer); cleanup(); resolve(null); };
+        script.src = 'https://bandcamp.com/api/oembed?url=' + encodeURIComponent(url) +
+                     '&format=js&callback=' + cbName;
+        document.head.appendChild(script);
+    });
+}
+
+function makeBandcampIframe(src, height) {
+    // Re-skin to dark theme only; preserve size/artwork from caller
+    src = src.replace(/bgcol=[a-fA-F0-9]+/, 'bgcol=000000')
+             .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8');
+    if (!src.includes('transparent=')) src = src.replace(/\/?$/, '/') + 'transparent=true/';
+    const iframe = document.createElement('iframe');
+    iframe.src = src;
+    iframe.style.cssText = 'border:0;width:100%;height:' + (height || 120) + 'px;display:block;';
+    iframe.setAttribute('seamless', '');
+    iframe.setAttribute('loading', 'lazy');
+    return iframe;
+}
+
+function makeMoreLineElement(lineText) {
+    const el = document.createElement('div');
+    el.className = 'more-line';
+
+    // 1. Bandcamp <iframe> embed code pasted directly — extract src and re-skin
+    const iframeMatch = lineText.match(/<iframe[^>]+src="(https:\/\/bandcamp\.com\/EmbeddedPlayer\/[^"]+)"[^>]*>/i);
+    if (iframeMatch) {
+        const heightMatch = lineText.match(/height[=:]["']?(\d+)/i);
+        el.appendChild(makeBandcampIframe(iframeMatch[1], heightMatch ? +heightMatch[1] : 120));
+        el.classList.add('bandcamp-embed-line');
+        return el;
+    }
+
+    const urlRe = /https?:\/\/[^\s]+/;
+    const m = lineText.match(urlRe);
+    if (m) {
+        const url = m[0].replace(/[.,;:!)]+$/, ''); // strip trailing punctuation
+        const prefix = lineText.slice(0, m.index).replace(/^[>\s.]+/, '').trimEnd();
+        if (prefix) el.appendChild(document.createTextNode(prefix + ' '));
+
+        const isBandcamp = url.includes('bandcamp.com');
+
+        // 2. Bandcamp URL — show slim player via oEmbed; fall back to text link on failure
+        if (isBandcamp) {
+            el.classList.add('bandcamp-embed-line');
+            fetchBandcampEmbedSrc(url).then(result => {
+                if (result) {
+                    el.appendChild(makeBandcampIframe(result.src, 42));
+                } else {
+                    const a = document.createElement('a');
+                    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    a.className = 'more-link more-link-bandcamp';
+                    try { a.textContent = new URL(url).pathname.split('/').filter(Boolean).pop() + ' ↗ (bandcamp)'; }
+                    catch { a.textContent = 'bandcamp ↗'; }
+                    el.appendChild(a);
+                }
+            });
+            return el;
+        }
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.className = 'more-link';
+        try { a.textContent = new URL(url).hostname.replace('www.', '') + ' ↗'; }
+        catch { a.textContent = url; }
+        el.appendChild(a);
+
+        const suffix = lineText.slice(m.index + m[0].length).trim();
+        if (suffix) el.appendChild(document.createTextNode(' ' + suffix));
+    } else {
+        el.textContent = lineText.trim();
+    }
+    return el;
+}
+
 // Display project about text (desktop and mobile); more.txt in red zone (right of info, same font/size)
 // Fade-in: line by line (name -> info lines -> more)
 function displayProjectAboutText(name, aboutLines, moreContent) {
@@ -6236,9 +7028,7 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
             // more.txt: line-by-line fade-in (same as about.txt)
             const moreLines = moreContent.trim().split(/\r?\n/).filter(l => l.trim());
             moreLines.forEach((line, idx) => {
-                const lineEl = document.createElement('div');
-                lineEl.className = 'more-line';
-                lineEl.textContent = line.trim();
+                const lineEl = makeMoreLineElement(line.trim());
                 lineEl.style.opacity = '0';
                 lineEl.style.transition = aboutTransition;
                 moreEl.appendChild(lineEl);
@@ -6261,34 +7051,28 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
     infoEl.style.visibility = 'visible';
     
     if (isMobileDevice()) {
-        // Mobile: position handled by draw() using world coords (same approach as more.txt)
+        // Mobile: same bottom-left layout as web
         if (containerEl.parentNode && containerEl.parentNode !== document.body) {
             document.body.appendChild(containerEl);
         }
-        const categoryContent = document.getElementById('mobileCategoryContent');
-        if (categoryContent) {
-            categoryContent.classList.add('visible');
-            categoryContent.style.pointerEvents = 'none';
-            categoryContent.style.visibility = 'visible';
-            categoryContent.style.opacity = '1';
-            categoryContent.style.background = 'transparent';
-        }
         containerEl.style.position = 'fixed';
+        containerEl.style.left = '20px';
+        containerEl.style.right = 'auto';
+        containerEl.style.bottom = 'calc(60px + env(safe-area-inset-bottom, 0px))';
+        containerEl.style.top = 'auto';
         containerEl.style.display = 'flex';
         containerEl.style.flexDirection = 'column';
-        containerEl.style.alignItems = 'stretch';
-        containerEl.style.gap = '10px';
-        containerEl.style.overflow = 'visible';
+        containerEl.style.alignItems = 'flex-start';
+        containerEl.style.gap = '6px';
         containerEl.style.zIndex = '10002';
         containerEl.style.transform = 'none';
+        containerEl.style.maxWidth = 'calc(100vw - 80px)';
         nameEl.style.position = 'static';
         nameEl.style.textAlign = 'left';
         infoEl.style.position = 'static';
         infoEl.style.textAlign = 'left';
-        if (moreEl && moreEl.textContent.trim()) moreEl.style.visibility = 'hidden';
         void containerEl.offsetHeight;
         setTimeout(() => { nameEl.style.opacity = '1'; }, 0);
-        // Trigger relayout so about block space is reserved in the gallery
         scheduleAlignedMobileRelayoutIfNeeded();
     }
     
@@ -6501,6 +7285,7 @@ window.addEventListener('resize', () => {
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     resizeRaf = requestAnimationFrame(() => {
         resizeRaf = 0;
+    canvasBoundingRect = null;
     resizeCanvas();
         // Invalidate mobile detection cache on resize
         if (draw._isMobileCached !== undefined) {
@@ -6517,4 +7302,9 @@ window.addEventListener('resize', () => {
     smoothMouseX = targetMouseX;
     smoothMouseY = targetMouseY;
     });
+});
+
+window.addEventListener('orientationchange', () => {
+    draw._isMobileCached = undefined;
+    canvasBoundingRect = null;
 });

@@ -3335,8 +3335,8 @@ function handleEmojiClick(clickedPoint) {
     // Update back button visibility
     updateBackButtonVisibility();
     
-    // Show prev/next buttons with 0.2s fade-in (desktop only; horizontal gallery scroll)
-    if (!isMobileDevice()) {
+    // Show prev/next buttons with 0.2s fade-in (desktop only, explore mode only)
+    if (!isMobileDevice() && !isIndexMode) {
         showSelectionNavButtons();
     }
 }
@@ -6367,7 +6367,7 @@ function _loadGalleryText(proj) {
             if (moreEl && text && text.trim()) {
                 moreEl.innerHTML = '';
                 text.trim().split(/\r?\n/).forEach(line => {
-                    moreEl.appendChild(makeMoreLineElement(line.toLowerCase()));
+                    moreEl.appendChild(makeMoreLineElement(line));
                 });
                 moreEl.style.display = '';
             } else if (moreEl) {
@@ -6905,11 +6905,14 @@ function fetchBandcampEmbedSrc(url) {
             const srcMatch = data.html.match(/src="([^"]+)"/);
             if (!srcMatch) return resolve(null);
             let src = srcMatch[1];
-            // Force dark theme colours
             src = src.replace(/bgcol=[a-fA-F0-9]+/, 'bgcol=000000')
-                      .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8');
+                      .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8')
+                      .replace(/size=large/, 'size=small')
+                      .replace(/size=medium/, 'size=small')
+                      .replace(/artwork=small\//, '')
+                      .replace(/artwork=large\//, '');
             if (!src.includes('transparent=')) src = src.replace(/\/?$/, '/') + 'transparent=true/';
-            resolve({ src, height: data.height || 120 });
+            resolve({ src, height: 42 });
         };
 
         script = document.createElement('script');
@@ -6921,13 +6924,13 @@ function fetchBandcampEmbedSrc(url) {
 }
 
 function makeBandcampIframe(src, height) {
-    // Re-skin to dark theme, keep all other params
+    // Re-skin to dark theme only; preserve size/artwork from caller
     src = src.replace(/bgcol=[a-fA-F0-9]+/, 'bgcol=000000')
              .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8');
     if (!src.includes('transparent=')) src = src.replace(/\/?$/, '/') + 'transparent=true/';
     const iframe = document.createElement('iframe');
     iframe.src = src;
-    iframe.style.height = height + 'px';
+    iframe.style.cssText = 'border:0;width:100%;height:' + (height || 120) + 'px;display:block;';
     iframe.setAttribute('seamless', '');
     iframe.setAttribute('loading', 'lazy');
     return iframe;
@@ -6940,7 +6943,7 @@ function makeMoreLineElement(lineText) {
     // 1. Bandcamp <iframe> embed code pasted directly — extract src and re-skin
     const iframeMatch = lineText.match(/<iframe[^>]+src="(https:\/\/bandcamp\.com\/EmbeddedPlayer\/[^"]+)"[^>]*>/i);
     if (iframeMatch) {
-        const heightMatch = lineText.match(/height="(\d+)"/i);
+        const heightMatch = lineText.match(/height[=:]["']?(\d+)/i);
         el.appendChild(makeBandcampIframe(iframeMatch[1], heightMatch ? +heightMatch[1] : 120));
         el.classList.add('bandcamp-embed-line');
         return el;
@@ -6955,29 +6958,32 @@ function makeMoreLineElement(lineText) {
 
         const isBandcamp = url.includes('bandcamp.com');
 
+        // 2. Bandcamp URL — show slim player via oEmbed; fall back to text link on failure
+        if (isBandcamp) {
+            el.classList.add('bandcamp-embed-line');
+            fetchBandcampEmbedSrc(url).then(result => {
+                if (result) {
+                    el.appendChild(makeBandcampIframe(result.src, 42));
+                } else {
+                    const a = document.createElement('a');
+                    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    a.className = 'more-link more-link-bandcamp';
+                    try { a.textContent = new URL(url).pathname.split('/').filter(Boolean).pop() + ' ↗ (bandcamp)'; }
+                    catch { a.textContent = 'bandcamp ↗'; }
+                    el.appendChild(a);
+                }
+            });
+            return el;
+        }
+
         const a = document.createElement('a');
         a.href = url;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
-        a.className = 'more-link' + (isBandcamp ? ' more-link-bandcamp' : '');
-        if (isBandcamp) {
-            a.textContent = 'bandcamp ↗';
-        } else {
-            try { a.textContent = new URL(url).hostname.replace('www.', '') + ' ↗'; }
-            catch { a.textContent = url; }
-        }
+        a.className = 'more-link';
+        try { a.textContent = new URL(url).hostname.replace('www.', '') + ' ↗'; }
+        catch { a.textContent = url; }
         el.appendChild(a);
-
-        // 2. Regular bandcamp.com URL — try JSONP oEmbed for a player
-        if (isBandcamp) {
-            const embedWrap = document.createElement('div');
-            embedWrap.className = 'bandcamp-embed-wrap';
-            el.appendChild(embedWrap);
-            fetchBandcampEmbedSrc(url).then(result => {
-                if (!result) return;
-                embedWrap.appendChild(makeBandcampIframe(result.src, result.height));
-            });
-        }
 
         const suffix = lineText.slice(m.index + m[0].length).trim();
         if (suffix) el.appendChild(document.createTextNode(' ' + suffix));

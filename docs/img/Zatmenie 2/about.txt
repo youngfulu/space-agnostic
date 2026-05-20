@@ -1,7 +1,7 @@
-name: ()
+name: (Zatmenie)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (a/v Performance)
+year: (2018)
+Location: Saint-Petersburg
+Contributor: Alinna
 

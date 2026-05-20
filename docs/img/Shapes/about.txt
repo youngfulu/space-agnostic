@@ -1,7 +1,6 @@
-name: ()
+name: (series of shapes)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (spatial design, materiality)
+year: (2018-2019)
+
 

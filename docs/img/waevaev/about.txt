@@ -1,7 +1,7 @@
-name: ()
+name: waevaev
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: music
+Year: 2023–2024
+Location: Paris, France
+Tags: electronic · experimental
 
