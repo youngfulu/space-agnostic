@@ -1,5 +1,3 @@
 name: (Spectral shapes)
-Project type: 
-Year: 
-Location: 
-Contributor: 
+Project type: Research, Sculpture, Sonic data visualization
+Year: 2021 
