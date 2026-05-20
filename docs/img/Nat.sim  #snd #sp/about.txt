@@ -1,0 +1,7 @@
+name: (Nat.Sim)
+#
+Project type: (Music Score, Simulation)
+year: (2025)
+Location: Salzburg
+Contributor: Ilya Duganov, Artem Slesarev.
+

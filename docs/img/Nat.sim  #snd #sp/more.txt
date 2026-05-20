@@ -1,0 +1,8 @@
+Developed in 2025 at the Mozarteum University Salzburg, this project resulted in a custom generative sound engine designed to simulate natural sound ambiences through computational modeling. The core outcome is a modular system that combines physical modeling techniques with neural networks to emulate the sonic behaviors of biological species native to the Salzburg region.
+
+By recording, analyzing, and classifying the spectral fingerprints of local species—such as the Red-breasted Flycatcher, Iberian Chiffchaff, and regional cicadas—the project reverse-engineers vocal and temporal patterns into a responsive sound synthesis framework. These analyses informed the creation of a bespoke Max/MSP-based engine capable of producing adaptive, species-inspired sonic behaviors rather than fixed samples.
+
+The resulting toolset served both as an autonomous generative system and as the primary instrumentarium for the composition OPEN GARDEN: TIPPING POINTS. The work explores biofeedback dynamics within an ecosystem, where subtle behavioral changes propagate through interconnected sound processes, producing emergent musical structures and inter-species sonic interactions.
+
+
+Spatialization was implemented using the SPAT5 library in combination with flocking algorithms, allowing sound sources to move, cluster, and disperse in ways analogous to natural acoustic environments. The final outcome is a living, spatially articulated sound ecology that functions simultaneously as a research prototype, a compositional instrument, and a performative system for simulating natural sonic processes.
