@@ -4036,12 +4036,15 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
     // Update UI
     updateBackButtonVisibility();
 
-    // Mobile: force back button visible at TOP overlaying the project page
+    // Mobile: back button at bottom (pill style)
     if (isMobileDevice()) {
         showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.classList.add('mpg-back-top');
+            mobileBack.style.left = '14px';
+            mobileBack.style.right = '14px';
+            mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+            mobileBack.style.top = 'auto';
             mobileBack.style.background = 'transparent';
             mobileBack.style.backgroundColor = 'transparent';
             mobileBack.style.zIndex = '20001';
