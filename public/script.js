@@ -109,6 +109,16 @@ function showMobileBackButton() {
     btn.style.visibility = 'visible';
     btn.style.position = 'fixed';
     btn.style.zIndex = '20001';
+    // Remove any inline overrides so CSS can fully control appearance
+    btn.style.removeProperty('left');
+    btn.style.removeProperty('right');
+    btn.style.removeProperty('width');
+    btn.style.removeProperty('background');
+    btn.style.removeProperty('background-color');
+    btn.style.removeProperty('transform');
+    btn.style.removeProperty('border-radius');
+    btn.style.removeProperty('border');
+    btn.style.removeProperty('padding');
 }
 function hideMobileBackButton() {
     const btn = document.getElementById('mobileCategoryBack');
@@ -3707,14 +3717,6 @@ function filterByTag(tag) {
         if (categoryBody) categoryBody.style.display = 'none';
         
         showMobileBackButton();
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) {
-            mobileBack.style.left = '14px';
-            mobileBack.style.right = '14px';
-            mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-            mobileBack.style.top = 'auto';
-            mobileBack.style.zIndex = '20001';
-        }
     }
 
     // Show back button
@@ -3845,14 +3847,6 @@ function showIndexFolderList(folders) {
 
         // Show back button
         showMobileBackButton();
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) {
-            mobileBack.style.left = '14px';
-            mobileBack.style.right = '14px';
-            mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-            mobileBack.style.top = 'auto';
-            mobileBack.style.zIndex = '20001';
-        }
     } else {
         container.style.left = '50px';
         container.style.right = 'auto';
@@ -3921,14 +3915,6 @@ function selectIndexFolder(folderPath, folderName) {
     // (it would intercept all touch events, breaking scroll in selection mode)
     if (isMobileDevice()) {
         showMobileBackButton();
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) {
-            mobileBack.style.left = '14px';
-            mobileBack.style.right = '14px';
-            mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-            mobileBack.style.top = 'auto';
-            mobileBack.style.zIndex = '20001';
-        }
     }
 
     // Fade out other folder items
@@ -4013,14 +3999,6 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
     // Mobile: back button at bottom (pill style)
     if (isMobileDevice()) {
         showMobileBackButton();
-        const mobileBack = document.getElementById('mobileCategoryBack');
-        if (mobileBack) {
-            mobileBack.style.left = '14px';
-            mobileBack.style.right = '14px';
-            mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-            mobileBack.style.top = 'auto';
-            mobileBack.style.zIndex = '20001';
-        }
     } else {
         showSelectionNavButtons();
     }
@@ -5587,14 +5565,6 @@ function handleMobileCategorySelect(category) {
     if (isMobileDevice()) {
         setMobileNavVisibility(false);
     }
-    const mobileBack = document.getElementById('mobileCategoryBack');
-    if (mobileBack) {
-        mobileBack.style.position = 'fixed';
-        mobileBack.style.left = '14px';
-        mobileBack.style.right = '14px';
-        mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-        mobileBack.style.top = 'auto';
-    }
     updateMobileGridPointerState();
     stopMobileAutoConnections();
     
@@ -5614,14 +5584,6 @@ function handleMobileCategorySelect(category) {
             isWeAreMode = true; // Set we are mode flag
             showMobileCategoryContent(category);
             showMobileBackButton();
-            const mobileBack = document.getElementById('mobileCategoryBack');
-            if (mobileBack) {
-                mobileBack.style.left = '14px';
-                mobileBack.style.right = '14px';
-                mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-                mobileBack.style.top = 'auto';
-                mobileBack.style.zIndex = '20001';
-            }
             return;
         }
         // "index" — show full project list (all folders, no tag filter)
@@ -5647,14 +5609,6 @@ function handleMobileCategorySelect(category) {
             const contentInner = document.querySelector('.mobile-category-content-inner');
             if (contentInner) { contentInner.style.display = 'none'; contentInner.style.visibility = 'hidden'; }
             showMobileBackButton();
-            const mobileBack = document.getElementById('mobileCategoryBack');
-            if (mobileBack) {
-                mobileBack.style.left = '14px';
-                mobileBack.style.right = '14px';
-                mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-                mobileBack.style.top = 'auto';
-                mobileBack.style.zIndex = '20001';
-            }
             showIndexFolderList(allFolders);
             updateBackButtonVisibility();
             return;
@@ -5671,12 +5625,6 @@ function handleMobileCategorySelect(category) {
         filterByTag(tag);
         // Always show back button for any tag category on mobile (filterByTag may return early if no folders)
         showMobileBackButton();
-        const mobileBackTag = document.getElementById('mobileCategoryBack');
-        if (mobileBackTag) {
-            mobileBackTag.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-            mobileBackTag.style.top = 'auto';
-            mobileBackTag.style.zIndex = '20001';
-        }
         updateBackButtonVisibility();
     } else {
         // Desktop: preserve existing behaviour
@@ -5715,14 +5663,6 @@ function showMobileCategoryContent(category) {
     const mobileAboutInfo = document.querySelector('.mobile-about-info');
     if (mobileAboutName) mobileAboutName.remove();
     if (mobileAboutInfo) mobileAboutInfo.remove();
-    
-    if (mobileBack) {
-        mobileBack.style.position = 'fixed';
-        mobileBack.style.left = '14px';
-        mobileBack.style.right = '14px';
-        mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-        mobileBack.style.top = 'auto';
-    }
     
     // Set category title
     const categoryLabels = {
