@@ -6193,7 +6193,6 @@ function renderProjectIndex() {
 
     // If any folder's metadata is still in-flight (null = pending fetch),
     // re-render once all fetches settle so the index shows correct year/type.
-    const folders = getTopLevelFolders();
     const hasPending = folders.some(f => (window.__PROJECT_META__ || {})[f] === null);
     if (hasPending) {
         function _waitAndRerender() {
