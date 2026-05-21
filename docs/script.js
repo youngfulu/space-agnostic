@@ -94,14 +94,6 @@ if (!ctx && canvas) {
     console.error('Could not get 2d context from canvas!');
 }
 
-// Logical (CSS-pixel) canvas dimensions — always use these for coordinate math
-let logW = window.innerWidth;
-let logH = window.innerHeight;
-
-// Grid pattern cache — declared here so resizeCanvas() can clear them on resize
-let gridPatternDesktop = null;
-let gridPatternMobile = null;
-
 let canvasBoundingRect = null;
 function getCanvasRect() {
     if (!canvasBoundingRect) canvasBoundingRect = canvas.getBoundingClientRect();
@@ -141,19 +133,13 @@ function debugLog(...args) {
 
 // Set canvas size
 function resizeCanvas() {
-    if (!canvas) { console.error('Canvas not initialized in resizeCanvas'); return; }
+    if (!canvas) {
+        console.error('Canvas not initialized in resizeCanvas');
+        return;
+    }
     const { width, height } = getViewportSize();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap at 2x for perf
-    logW = width;
-    logH = height;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-    canvas._dpr = dpr;
-    // Reset grid pattern cache on resize
-    gridPatternDesktop = null;
-    gridPatternMobile = null;
+    canvas.width = width;
+    canvas.height = height;
 }
 // Only resize if canvas is available (single initial run; resize handler is in runAppInit with rAF debounce)
 if (canvas) {
@@ -178,8 +164,8 @@ const opacitySmoothness = 0.08; // Linear fade: ~1 second at 60fps (2x slower)
 const INDEX_MODE_FADE_SPEED = 0.04; // Slower fade for index mode: ~2 seconds at 60fps
 
 // Mouse/touch position
-let mouseX = canvas ? logW / 2 : window.innerWidth / 2;
-let mouseY = canvas ? logH / 2 : window.innerHeight / 2;
+let mouseX = canvas ? canvas.width / 2 : window.innerWidth / 2;
+let mouseY = canvas ? canvas.height / 2 : window.innerHeight / 2;
 let targetMouseX = mouseX;
 let targetMouseY = mouseY;
 
@@ -513,8 +499,8 @@ function drawMobileAutoLines(ctx, now) {
     if (!mobileAutoEnabled || mobileAutoLines.length === 0) return;
     
     ctx.save();
-    const centerX = logW / 2;
-    const centerY = logH / 2;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
     ctx.translate(centerX + cameraPanX, centerY + cameraPanY);
     ctx.scale(globalZoomLevel, globalZoomLevel);
     ctx.translate(-centerX, -centerY);
@@ -644,14 +630,14 @@ function layoutAlignedEmojisDesktop(animate = true) {
     // - Selection occupies the LEFT 2/3 of the screen
     // - Images scaled so row height = 2/3 of vertical screen space
     const horizontalGap = 35;
-    const centerX = logW / 2;
-    const centerY = logH / 2;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
 
     const regionLeft = 40;
-    const regionRight = (logW * 2) / 3 - 40;
+    const regionRight = (canvas.width * 2) / 3 - 40;
     const regionWidth = Math.max(1, regionRight - regionLeft);
     const SELECTION_ROW_HEIGHT_FRACTION = 2 / 3;
-    const targetRowHeightScreen = logH * SELECTION_ROW_HEIGHT_FRACTION;
+    const targetRowHeightScreen = canvas.height * SELECTION_ROW_HEIGHT_FRACTION;
 
     // Row image height = 2/3 viewport; zoom/pan fits the strip (wide panoramas no longer shrink height)
     const targetHeightScreen = targetRowHeightScreen;
@@ -736,7 +722,7 @@ function layoutAlignedEmojisDesktop(animate = true) {
     // Calculate zoom levels
     // Zoom OUT: level that fits the ENTIRE grid centered in screen
     const screenPadding = 60;
-    const availableWidth = logW - screenPadding * 2;
+    const availableWidth = canvas.width - screenPadding * 2;
     const zoomOutLevel = Math.min(availableWidth / totalWidthWithSideGaps, 1.0);
     
     // Zoom IN: final zoom level (fits row + side gaps in LEFT 2/3 region)
@@ -855,16 +841,16 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
     loadHighresForPaths(alignedEmojis.map(p => p.imagePath));
     const selectedZoom = zoomLevels[initialZoomIndex]; // 1.0
     // Equal left and right margin (e.g. 14px or 4% each side), images use remaining width
-    const marginScreen = Math.max(14, logW * 0.04);
+    const marginScreen = Math.max(14, canvas.width * 0.04);
     const paddingScreen = marginScreen;
-    const targetWidthScreen = logW - 2 * marginScreen;
-    const maxImageHeightScreen = logH * (2 / 3);
+    const targetWidthScreen = canvas.width - 2 * marginScreen;
+    const maxImageHeightScreen = canvas.height * (2 / 3);
     const gapScreen = MOBILE_SELECTION_VERTICAL_GAP;
     const topPaddingScreen = marginScreen;
 
     const gapWorld = gapScreen / selectedZoom;
     const topPaddingWorld = topPaddingScreen / selectedZoom;
-    const centerX = logW / 2;
+    const centerX = canvas.width / 2;
 
     const widths = [];
     const heights = [];
@@ -990,7 +976,7 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
 
     mobileAlignedContentHeightWorld = yTop + topPaddingWorld;
     const firstCenterYWorld = alignedEmojis[0].targetY;
-    const worldOffsetY = (firstCenterYWorld - (logH / 2)) * selectedZoom;
+    const worldOffsetY = (firstCenterYWorld - (canvas.height / 2)) * selectedZoom;
     mobileAlignedBasePanY = -worldOffsetY;
     mobileAlignedBasePanX = 0;
 
@@ -1007,7 +993,7 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
     cameraPanX = 0;
     cameraPanY = mobileAlignedBasePanY;
 
-    scrollIndicatorVisible = (mobileAlignedContentHeightWorld * selectedZoom) > logH;
+    scrollIndicatorVisible = (mobileAlignedContentHeightWorld * selectedZoom) > canvas.height;
     if (scrollIndicatorVisible) {
         scrollIndicatorFadeTime = performance.now() + 3000;
     }
@@ -1701,15 +1687,15 @@ function gifOverlayHideUnused() {
 }
 
 function worldBoxToClientRect(centerWorldX, centerWorldY, drawW, drawH) {
-    const centerX = logW / 2;
-    const centerY = logH / 2;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
     const sx = (centerWorldX - centerX) * globalZoomLevel + centerX + cameraPanX;
     const sy = (centerWorldY - centerY) * globalZoomLevel + centerY + cameraPanY;
     const cw = drawW * globalZoomLevel;
     const ch = drawH * globalZoomLevel;
     const r = canvas.getBoundingClientRect();
-    const scaleX = r.width / Math.max(1, logW);
-    const scaleY = r.height / Math.max(1, logH);
+    const scaleX = r.width / Math.max(1, canvas.width);
+    const scaleY = r.height / Math.max(1, canvas.height);
     return {
         left: r.left + (sx - cw / 2) * scaleX,
         top: r.top + (sy - ch / 2) * scaleY,
@@ -1990,19 +1976,19 @@ if (document.readyState === 'loading') {
 // For mobile: make grid wider than screen for exploration
 function getBoundingBox() {
     const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-    const screenHeight = logH;
+    const screenHeight = canvas.height;
     const margin = screenHeight / 5;
 
-    let width = logW;
+    let width = canvas.width;
     // On mobile, make grid wider to allow navigation; landscape (tablet): 1.5x so grid is 2x narrower
     if (isMobile) {
-        const isLandscape = logW > logH;
-        width = isLandscape ? logW * 1.5 : logW * 3;
+        const isLandscape = canvas.width > canvas.height;
+        width = isLandscape ? canvas.width * 1.5 : canvas.width * 3;
     }
 
     // Center the random grid around the viewport so its midpoint aligns with the mobile
     // nav intersection ("we are" sits at viewport center). Desktop stays origin-based.
-    const offsetX = isMobile ? (logW - width) / 2 : 0;
+    const offsetX = isMobile ? (canvas.width - width) / 2 : 0;
     
     return {
         x: offsetX,
@@ -2367,8 +2353,8 @@ function handleTouchMove(e) {
                 if (pinchStartDistance > 0) {
                     var ratio = curDist / pinchStartDistance;
                     var newZoom = pinchStartZoom * ratio;
-                    var cX = logW / 2;
-                    var cY = logH / 2;
+                    var cX = canvas.width / 2;
+                    var cY = canvas.height / 2;
                     var curZ = targetZoomLevel ?? globalZoomLevel ?? 1.0;
                     var curPanX = cameraPanX;
                     var curPanY = cameraPanY;
@@ -2397,7 +2383,7 @@ function handleTouchMove(e) {
             
             if (isMobileScrolling) {
                 const deltaY = touchY - touchStartY;
-                const screenHeight = logH;
+                const screenHeight = canvas.height;
                 // Convert touch delta to scroll position (0 to 1) - more sensitive
                 const scrollDelta = -deltaY / (screenHeight * 1.5); // More sensitive scrolling
                 const nextPos = Math.max(0, Math.min(1, touchStartScrollPosition + scrollDelta));
@@ -2469,8 +2455,8 @@ function handleMouseLeave() {
     mouseOverCanvas = false;
     
     if (!isDragging) {
-    targetMouseX = logW / 2;
-    targetMouseY = logH / 2;
+    targetMouseX = canvas.width / 2;
+    targetMouseY = canvas.height / 2;
     }
     
     // Clear hover state when mouse leaves canvas
@@ -2703,8 +2689,8 @@ function handleWheel(e) {
     
     // If in selection or connection (dotted line) mode, use smooth gradual zoom/pan at any zoom level
     if (alignedEmojiIndex !== null || isConnectionMode) {
-        const centerX = logW / 2;
-        const centerY = logH / 2;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
 
         // Selection mode: horizontal wheel/scroll = carousel pan (left-right)
         if (alignedEmojiIndex !== null && !isMobileDevice() && Math.abs(e.deltaX) > 0) {
@@ -2869,34 +2855,28 @@ const layer2Speed = 0.5; // Speed for layer_2 (slower for depth effect)
 // Grid rendering cache (pattern-based, much cheaper than per-line loops)
 const gridSize = 25;
 // gridPatternDesktop and gridPatternMobile declared near top of file (before resizeCanvas)
+let gridPatternDesktop = null;
+let gridPatternMobile = null;
 function getGridPattern() {
     if (!ctx) return null;
     const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window));
     if (isMobile && gridPatternMobile) return gridPatternMobile;
     if (!isMobile && gridPatternDesktop) return gridPatternDesktop;
-    const dpr = canvas._dpr || 1;
     const tile = document.createElement('canvas');
-    const physicalSize = Math.round(gridSize * dpr);
-    tile.width = physicalSize;
-    tile.height = physicalSize;
+    tile.width = gridSize;
+    tile.height = gridSize;
     const tctx = tile.getContext('2d');
     if (!tctx) return null;
     const gridOpacity = isMobile ? 0.24 * 0.8 * 0.8 : 0.24 * 0.8;
     tctx.strokeStyle = `rgba(255, 255, 255, ${gridOpacity})`;
-    tctx.lineWidth = 1; // 1 physical pixel
+    tctx.lineWidth = 1;
     tctx.beginPath();
     tctx.moveTo(0.5, 0);
-    tctx.lineTo(0.5, physicalSize);
+    tctx.lineTo(0.5, gridSize);
     tctx.moveTo(0, 0.5);
-    tctx.lineTo(physicalSize, 0.5);
+    tctx.lineTo(gridSize, 0.5);
     tctx.stroke();
-    // Scale the pattern to appear at CSS gridSize
     const pattern = ctx.createPattern(tile, 'repeat');
-    if (pattern) {
-        const matrix = new DOMMatrix();
-        matrix.scaleSelf(1 / dpr, 1 / dpr);
-        pattern.setTransform(matrix);
-    }
     if (isMobile) gridPatternMobile = pattern; else gridPatternDesktop = pattern;
     return pattern;
 }
@@ -2907,8 +2887,8 @@ function findPointAtMouse(mouseX, mouseY) {
     // Canvas transform order: translate(-centerX, -centerY), scale(zoom), translate(centerX + panX, centerY + panY)
     // World to screen: (wx - cx) * zoom + cx + panX
     // Screen to world: (sx - cx - panX) / zoom + cx
-    const centerX = logW / 2;
-    const centerY = logH / 2;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
     const effectiveZoom = globalZoomLevel; // Use current zoom level for accurate detection
     
     // Convert screen coordinates to world coordinates by reversing the transform
@@ -3041,8 +3021,8 @@ function unalignEmojis() {
     panVelocityY = 0;
     
     // Reset mouse position to center (original screen space position)
-    targetMouseX = logW / 2;
-    targetMouseY = logH / 2;
+    targetMouseX = canvas.width / 2;
+    targetMouseY = canvas.height / 2;
     smoothMouseX = targetMouseX;
     smoothMouseY = targetMouseY;
     
@@ -3833,8 +3813,7 @@ function showIndexFolderList(folders) {
                     const _base = (window.__BASE_URL__ || '').replace(/\/$/, '');
                     imgEl.src = _base + '/img/' + item.previewPath.split('/').map(s => encodeURIComponent(s)).join('/');
                     imgEl.alt = '';
-                    imgEl.loading = animIdx < 3 ? 'eager' : 'lazy';
-                    imgEl.decoding = 'async';
+                    imgEl.loading = 'lazy';
                     card.appendChild(imgEl);
                 }
 
@@ -4375,13 +4354,11 @@ function draw() {
     }
 
     // DPR base transform — all drawing happens in CSS-pixel space
-    const _dpr = canvas._dpr || 1;
-
     // IMPORTANT: Don't draw images until all words have appeared
     if (!allWordsVisible) {
         // Only draw black background while words are loading
         ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, logW, logH);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         gifOverlayFrameReset();
         gifOverlayHideUnused();
         return;
@@ -4445,8 +4422,8 @@ function draw() {
     // Do NOT update it here - this ensures zoom uses the exact mouse position from wheel/touch events
     
     // Calculate center for gyroscope smoothing (used later in parallax calculation)
-    const centerX = logW / 2;
-    const centerY = logH / 2;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
     
     // Connection mode labels: fade in 0.5s, fade out 0.1s on exit
     const labelsNow = performance.now();
@@ -4630,7 +4607,7 @@ function draw() {
                 const box = getBoundingBox();
                 const gridWidth = box.width;
                 const gridHeight = box.height;
-                const maxZoomOut = Math.min(logW / gridWidth, logH / gridHeight);
+                const maxZoomOut = Math.min(canvas.width / gridWidth, canvas.height / gridHeight);
                 clampedZoom = Math.max(maxZoomOut, Math.min(maxZoom, newTargetZoom));
             } else {
                 clampedZoom = Math.max(minZoom, Math.min(maxZoom, newTargetZoom));
@@ -4680,7 +4657,7 @@ function draw() {
         
         // Calculate scroll offset and apply to camera pan Y
         // Use layout-derived content height; compute max scroll in world units, then convert to screen px.
-        const viewHeightWorld = logH / Math.max(0.0001, globalZoomLevel);
+        const viewHeightWorld = canvas.height / Math.max(0.0001, globalZoomLevel);
         const maxScrollWorld = Math.max(0, mobileAlignedContentHeightWorld - viewHeightWorld);
         const scrollOffsetWorld = mobileScrollPosition * maxScrollWorld;
         const scrollOffsetScreen = scrollOffsetWorld * globalZoomLevel;
@@ -4745,17 +4722,17 @@ function draw() {
     
     // Clear canvas with black background
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, logW, logH);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw static background grid in SCREEN space (not affected by zoom/pan)
     const gridPattern = getGridPattern();
     if (gridPattern) {
         ctx.save();
         // Ensure identity transform so pattern doesn't inherit camera transform
-        ctx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = 1.0;
         ctx.fillStyle = gridPattern;
-        ctx.fillRect(0, 0, logW, logH);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
     }
     
@@ -5232,7 +5209,7 @@ function draw() {
         const indicatorPadding = 8; // Padding from left edge
         const indicatorHeight = 60; // Height of the scroll indicator
         const indicatorMinY = 50; // Minimum Y position (top padding)
-        const indicatorMaxY = logH - 50 - indicatorHeight; // Maximum Y position
+        const indicatorMaxY = canvas.height - 50 - indicatorHeight; // Maximum Y position
         
         // Calculate indicator position based on scroll position
         const indicatorY = indicatorMinY + (mobileScrollPosition * (indicatorMaxY - indicatorMinY));
@@ -5261,7 +5238,7 @@ function draw() {
     if (isMobileDevice() && alignedEmojiIndex !== null && mobileMoreBlockCenterYWorld > 0) {
         const moreEl = document.getElementById('projectMore');
         if (moreEl && moreEl.textContent.trim()) {
-            const centerY = logH / 2;
+            const centerY = canvas.height / 2;
             const screenY = (mobileMoreBlockCenterYWorld - centerY) * globalZoomLevel + centerY + cameraPanY;
             const top = screenY - (mobileMoreBlockHeightWorld * globalZoomLevel) / 2;
             moreEl.style.position = 'fixed';
@@ -5284,7 +5261,7 @@ function draw() {
     if (isMobileDevice() && alignedEmojiIndex !== null && mobileAboutBlockCenterYWorld > 0) {
         const aboutEl = document.getElementById('projectAboutText');
         if (aboutEl && aboutEl.style.display !== 'none') {
-            const centerY = logH / 2;
+            const centerY = canvas.height / 2;
             const screenY = (mobileAboutBlockCenterYWorld - centerY) * globalZoomLevel + centerY + cameraPanY;
             const top = screenY - (mobileAboutBlockHeightWorld * globalZoomLevel) / 2;
             aboutEl.style.position = 'fixed';
@@ -7360,8 +7337,8 @@ function updateProjectAboutTextPosition(containerEl, nameEl, infoEl) {
     if (isMobileDevice()) return;
 
     const zoom = globalZoomLevel;
-    const centerX = logW / 2;
-    const centerY = logH / 2;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
     
     // Get image dimensions for first image
     const firstImageData = imageCache[firstImage.imagePath];
@@ -7534,8 +7511,8 @@ window.addEventListener('resize', () => {
     points.push(...newPoints);
     precomputeConnectionTrajectories(); // Recompute so dotted-line hover uses current point refs
     // Update mouse position
-    targetMouseX = logW / 2;
-    targetMouseY = logH / 2;
+    targetMouseX = canvas.width / 2;
+    targetMouseY = canvas.height / 2;
     smoothMouseX = targetMouseX;
     smoothMouseY = targetMouseY;
     });

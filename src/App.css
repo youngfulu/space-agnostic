@@ -22,10 +22,6 @@ body {
     z-index: 1;
     position: relative;
     touch-action: none;
-    /* GPU compositing for smoother rendering */
-    will-change: transform;
-    /* Prevent browser from applying extra interpolation over our DPR-aware render */
-    image-rendering: -webkit-optimize-contrast;
 }
 
 #canvas.images-loaded {
