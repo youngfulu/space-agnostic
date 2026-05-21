@@ -113,7 +113,6 @@ function showMobileBackButton() {
 function hideMobileBackButton() {
     const btn = document.getElementById('mobileCategoryBack');
     if (!btn) return;
-    btn.classList.remove('mpg-back-top');
     btn.style.setProperty('display', 'none', 'important');
     btn.style.pointerEvents = 'none';
     btn.style.opacity = '0';
@@ -3714,7 +3713,6 @@ function filterByTag(tag) {
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
-            mobileBack.style.background = 'transparent';
             mobileBack.style.zIndex = '20001';
         }
     }
@@ -3853,7 +3851,6 @@ function showIndexFolderList(folders) {
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
-            mobileBack.style.background = 'transparent';
             mobileBack.style.zIndex = '20001';
         }
     } else {
@@ -3930,8 +3927,6 @@ function selectIndexFolder(folderPath, folderName) {
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
-            mobileBack.style.background = 'transparent';
-            mobileBack.style.backgroundColor = 'transparent';
             mobileBack.style.zIndex = '20001';
         }
     }
@@ -4024,8 +4019,6 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
             mobileBack.style.right = '14px';
             mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
             mobileBack.style.top = 'auto';
-            mobileBack.style.background = 'transparent';
-            mobileBack.style.backgroundColor = 'transparent';
             mobileBack.style.zIndex = '20001';
         }
     } else {
@@ -5601,7 +5594,6 @@ function handleMobileCategorySelect(category) {
         mobileBack.style.right = '14px';
         mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
         mobileBack.style.top = 'auto';
-        mobileBack.style.background = 'transparent';
     }
     updateMobileGridPointerState();
     stopMobileAutoConnections();
@@ -5628,7 +5620,6 @@ function handleMobileCategorySelect(category) {
                 mobileBack.style.right = '14px';
                 mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
                 mobileBack.style.top = 'auto';
-                mobileBack.style.background = 'transparent';
                 mobileBack.style.zIndex = '20000';
             }
             return;
@@ -5662,7 +5653,6 @@ function handleMobileCategorySelect(category) {
                 mobileBack.style.right = '14px';
                 mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
                 mobileBack.style.top = 'auto';
-                mobileBack.style.background = 'transparent';
                 mobileBack.style.zIndex = '20001';
             }
             showIndexFolderList(allFolders);
@@ -5732,7 +5722,6 @@ function showMobileCategoryContent(category) {
         mobileBack.style.right = '14px';
         mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
         mobileBack.style.top = 'auto';
-        mobileBack.style.background = 'transparent';
     }
     
     // Set category title
