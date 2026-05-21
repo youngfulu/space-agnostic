@@ -113,6 +113,7 @@ function showMobileBackButton() {
 function hideMobileBackButton() {
     const btn = document.getElementById('mobileCategoryBack');
     if (!btn) return;
+    btn.classList.remove('mpg-back-top');
     btn.style.setProperty('display', 'none', 'important');
     btn.style.pointerEvents = 'none';
     btn.style.opacity = '0';
@@ -4013,18 +4014,15 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
     // Update UI
     updateBackButtonVisibility();
 
-    // Mobile: force back button visible/top in selection mode
+    // Mobile: force back button visible at TOP overlaying the project page
     if (isMobileDevice()) {
         showMobileBackButton();
         const mobileBack = document.getElementById('mobileCategoryBack');
         if (mobileBack) {
-            mobileBack.style.left = '14px';
-            mobileBack.style.right = '14px';
-            mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
-            mobileBack.style.top = 'auto';
+            mobileBack.classList.add('mpg-back-top');
             mobileBack.style.background = 'transparent';
             mobileBack.style.backgroundColor = 'transparent';
-            mobileBack.style.zIndex = '20000';
+            mobileBack.style.zIndex = '20001';
         }
     } else {
         showSelectionNavButtons();
