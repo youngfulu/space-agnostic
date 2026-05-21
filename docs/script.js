@@ -1127,7 +1127,7 @@ function getTouchMidpoint(t1, t2) {
 
 // Image list — paths relative to Artsy/ (see scripts/generate-image-list.js)
 const imagePaths = [
-    'Acousmonium #snd #pf/Screenshot 2024-07-27 at 15.43.45.png',
+    'Acousmonium #snd #pf/acusmo-me.jpg',
     'Acousmonium #snd #pf/pasted-image.jpg',
     'Acousmonium #snd #pf/pasted-image.png',
     'Acousmonium #snd #pf/photo_2562@19-07-2021_12-45-07.jpg',
@@ -1301,8 +1301,6 @@ const imagePaths = [
     'cultural issues #exp #snd/c1.jpg',
     'cultural issues #exp #snd/c2.jpg',
     'cultural issues #exp #snd/c3.jpg',
-    'ex_m6  #snd #pf #vis/A/20240314_180920_resized.jpg',
-    'ex_m6  #snd #pf #vis/A/Photo027.jpg',
     'ex_m6  #snd #pf #vis/IMG_1365.jpeg',
     'ex_m6  #snd #pf #vis/IMG_1388.jpeg',
     'ex_m6  #snd #pf #vis/Screenshot 2024-02-27 at 23.59.20.png',
@@ -3749,58 +3747,70 @@ function showIndexFolderList(folders) {
             if (!byYear[yr]) byYear[yr] = [];
             const cleanName = (folder.name || '').replace(/\s*#.*$/, '').trim() || folder.name;
             const hashtag = m.projectType ? m.projectType.toLowerCase() : getFolderTags(fname).map(t => '#' + t).join(' ');
-            byYear[yr].push({ cleanName, hashtag, path: folder.path });
+            byYear[yr].push({ cleanName, hashtag, path: folder.path, previewPath: m.previewPath || null, year: yr });
         });
         const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
 
-        // Render year groups with staggered appearance
+        // Render as LOT2-style image cards grouped by year
         let animIdx = 0;
-        years.forEach(yr => {
-            // Year label
-            const yrEl = document.createElement('div');
-            yrEl.className = 'mob-cat-year-label';
-            yrEl.textContent = yr || '—';
-            yrEl.style.opacity = '0';
-            yrEl.style.transition = 'opacity 0.3s ease-out';
-            yrEl.style.marginTop = animIdx === 0 ? '0' : '20px';
-            container.appendChild(yrEl);
-            const yrIdx = animIdx++;
-            setTimeout(() => { yrEl.style.opacity = '1'; }, yrIdx * 80);
+        years.forEach((yr, groupIdx) => {
+            // Year group header — full-width line + big year label
+            const yrHeader = document.createElement('div');
+            yrHeader.className = 'mob-cat-year-header';
+            yrHeader.style.marginTop = groupIdx === 0 ? '0' : '36px';
 
-            // Divider
-            const divEl = document.createElement('div');
-            divEl.className = 'mob-cat-divider';
-            divEl.style.marginBottom = '4px';
-            container.appendChild(divEl);
+            const yrLine = document.createElement('div');
+            yrLine.className = 'mob-cat-year-line';
+            const yrLabel = document.createElement('div');
+            yrLabel.className = 'mob-cat-year-big';
+            yrLabel.textContent = yr || '—';
+
+            yrHeader.appendChild(yrLabel);
+            yrHeader.appendChild(yrLine);
+            yrHeader.style.opacity = '0';
+            yrHeader.style.transition = 'opacity 0.3s ease-out';
+            container.appendChild(yrHeader);
+            const hIdx = animIdx++;
+            setTimeout(() => { yrHeader.style.opacity = '1'; }, hIdx * 60);
 
             byYear[yr].forEach(item => {
-                const row = document.createElement('div');
-                row.className = 'index-folder-item';
-                row.style.display = 'flex';
-                row.style.justifyContent = 'space-between';
-                row.style.alignItems = 'baseline';
-                row.style.width = '100%';
-                row.style.padding = '6px 0';
-                row.style.whiteSpace = 'normal';
+                const card = document.createElement('div');
+                card.className = 'mob-cat-card index-folder-item';
+                card.dataset.folderPath = item.path;
 
-                const nameEl = document.createElement('span');
+                // Preview image
+                if (item.previewPath) {
+                    const imgEl = document.createElement('img');
+                    imgEl.className = 'mob-cat-card__img';
+                    imgEl.src = '/img/' + item.previewPath.split('/').map(s => encodeURIComponent(s)).join('/');
+                    imgEl.alt = '';
+                    imgEl.loading = 'lazy';
+                    card.appendChild(imgEl);
+                }
+
+                // Text block
+                const textEl = document.createElement('div');
+                textEl.className = 'mob-cat-card__text';
+
+                const nameEl = document.createElement('div');
+                nameEl.className = 'mob-cat-card__name';
                 nameEl.textContent = item.cleanName.toLowerCase();
-                nameEl.style.flex = '1';
 
-                const tagEl = document.createElement('span');
-                tagEl.textContent = item.hashtag;
-                tagEl.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.4);text-align:right;white-space:nowrap;flex-shrink:0;margin-left:12px;';
+                const typeEl = document.createElement('div');
+                typeEl.className = 'mob-cat-card__type';
+                typeEl.textContent = item.hashtag || '';
 
-                row.appendChild(nameEl);
-                row.appendChild(tagEl);
-                row.dataset.folderPath = item.path;
-                row.addEventListener('click', () => {
+                textEl.appendChild(nameEl);
+                textEl.appendChild(typeEl);
+                card.appendChild(textEl);
+
+                card.addEventListener('click', () => {
                     selectIndexFolder(item.path, item.cleanName);
                 });
-                container.appendChild(row);
+                container.appendChild(card);
 
-                const rowIdx = animIdx++;
-                setTimeout(() => { row.classList.add('visible'); }, rowIdx * 80);
+                const cardIdx = animIdx++;
+                setTimeout(() => { card.classList.add('visible'); }, cardIdx * 60);
             });
         });
 
@@ -3830,30 +3840,22 @@ function showIndexFolderList(folders) {
         container.style.maxHeight = '';
         container.style.removeProperty('display');
         container.style.zIndex = '';
-    }
-    
-    // Create folder items
-    folders.forEach((folder, index) => {
-        const item = document.createElement('div');
-        item.className = 'index-folder-item';
-        // Display clean folder name without hashtags (text before "#")
-        const cleanName = (folder.name || '').replace(/\s*#.*$/, '').trim() || folder.name;
-        item.textContent = cleanName;
-        item.dataset.folderPath = folder.path;
-        
-        // Add click handler
-        item.addEventListener('click', () => {
-            selectIndexFolder(folder.path, cleanName);
+
+        // Desktop: create simple text folder items
+        folders.forEach((folder, index) => {
+            const item = document.createElement('div');
+            item.className = 'index-folder-item';
+            const cleanName = (folder.name || '').replace(/\s*#.*$/, '').trim() || folder.name;
+            item.textContent = cleanName;
+            item.dataset.folderPath = folder.path;
+            item.addEventListener('click', () => {
+                selectIndexFolder(folder.path, cleanName);
+            });
+            container.appendChild(item);
+            setTimeout(() => { item.classList.add('visible'); }, index * 100);
         });
-        
-        container.appendChild(item);
-        
-        // Staggered appearance animation (0.1s delay per item)
-        setTimeout(() => {
-            item.classList.add('visible');
-        }, index * 100);
-    });
-    
+    }
+
     // Show container
     container.classList.add('visible');
 }
@@ -3951,25 +3953,14 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
     alignedFolderPath = folderPath;
     
     if (isMobileDevice()) {
-        // Restore canvas opacity (may have been dimmed to 0.05 by folder list)
-        if (canvas) canvas.style.opacity = '';
-        // Mobile: align in a simple vertical column (10% left padding, 60% width), non-interactive
-    folderPoints.forEach(p => {
-        p.isAligned = true;
-            p.isInactive = true; // non-clickable
-        p.targetOpacity = 1.0;
-    });
-        // Fade out others
-    points.forEach(p => {
-        if (!folderPoints.includes(p)) {
-            p.targetOpacity = 0.0;
-            p.isInactive = true;
-        }
-    });
-    layoutAlignedEmojisMobileVertical(false); // snap into place
-    if (isMobileDevice()) {
-        setMobileNavVisibility(false); // keep nav/buttons hidden during selection
-    }
+        // Fade canvas to black — DOM project page takes over
+        if (canvas) canvas.style.opacity = '0';
+        // Keep points hidden (don't bother laying them out on canvas for mobile)
+        folderPoints.forEach(p => { p.isAligned = true; p.isInactive = true; p.targetOpacity = 0.0; });
+        points.forEach(p => { p.targetOpacity = 0.0; p.isInactive = true; });
+        setMobileNavVisibility(false);
+        // Show LOT2-style DOM project page
+        showMobileProjectPage(folderPath);
     } else {
         // DESKTOP: keep existing behavior
         folderPoints.forEach(p => {
@@ -3987,9 +3978,11 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
         layoutAlignedEmojisDesktop(animateLayout);
     }
     
-    // Load and display about.txt
-    loadAndDisplayAboutText(folderPath);
-    
+    // Load and display about.txt (desktop only — mobile uses DOM project page)
+    if (!isMobileDevice()) {
+        loadAndDisplayAboutText(folderPath);
+    }
+
     // Update UI
     updateBackButtonVisibility();
 
@@ -4066,11 +4059,14 @@ function exitIndexMode() {
 // Return to folder selection from image selection
 function returnToFolderSelection() {
     if (!isIndexMode) return;
-    
+
+    // Hide LOT2 DOM project page on mobile
+    if (isMobileDevice()) hideMobileProjectPage();
+
     // Hide about text and prev/next immediately so they fade out when going back to menu
     hideProjectAboutText();
     hideSelectionNavButtons();
-    
+
     resetMobileSelectionLayout();
     
     selectedIndexFolder = null;
@@ -4094,9 +4090,11 @@ function returnToFolderSelection() {
         p.hoverSize = 1.0;
     });
     
-    // Re-show folder list
+    // Re-show folder list — dim canvas again for list mode
+    if (isMobileDevice() && canvas) canvas.style.opacity = '0.05';
+
     showIndexFolderList(indexModeFolders);
-    
+
     // Reset camera
     currentZoomIndex = initialZoomIndex;
     startZoomTransition();
@@ -6128,12 +6126,25 @@ function renderProjectIndex() {
             nameEl.className = 'project-index-name';
             nameEl.textContent = proj.name.toLowerCase();
 
-            // Right cell: project type (from about.txt) or hashtags as fallback, else "wip"
+            // Right cell: project type + year (from about.txt) or hashtags as fallback, else "wip"
             const typeEl = document.createElement('span');
             typeEl.className = 'project-index-tags';
             const _desc = proj.projectType || proj.tags.join(' · ');
-            typeEl.textContent = _desc || 'wip';
-            if (!_desc) typeEl.classList.add('project-index-wip');
+            if (!_desc) {
+                typeEl.textContent = 'wip';
+                typeEl.classList.add('project-index-wip');
+            } else {
+                const tLine = document.createElement('span');
+                tLine.textContent = _desc;
+                typeEl.appendChild(tLine);
+                if (proj.year) {
+                    typeEl.appendChild(document.createElement('br'));
+                    const yLine = document.createElement('span');
+                    yLine.className = 'project-index-year-inline';
+                    yLine.textContent = proj.year;
+                    typeEl.appendChild(yLine);
+                }
+            }
 
             row.appendChild(nameEl);
             row.appendChild(typeEl);
@@ -6653,6 +6664,152 @@ function createProjectAboutElements() {
     }
     
     return { containerEl, nameEl, infoEl, moreEl };
+}
+
+// ── Mobile LOT2-style project page ──────────────────────────────────────────
+
+function _getMobileProjectPageEl() {
+    let el = document.getElementById('mobileProjectPage');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'mobileProjectPage';
+        el.innerHTML = '<div class="mpg-scroll" id="mpgScroll"></div>';
+        document.body.appendChild(el);
+    }
+    return el;
+}
+
+function showMobileProjectPage(folderPath) {
+    const page = _getMobileProjectPageEl();
+    const scroll = document.getElementById('mpgScroll');
+    if (!scroll) return;
+
+    // Show instantly — no fade so old canvas text doesn't bleed through
+    scroll.innerHTML = '';
+    page.style.transition = 'none';
+    page.style.opacity = '1';
+    page.style.display = 'block';
+    page.classList.add('visible');
+    // Also hide old about-text overlay so it never shows on mobile
+    const _pat = document.getElementById('projectAboutText');
+    if (_pat) _pat.style.display = 'none';
+
+    // Build image list from imagePaths for this folder
+    const folderKey = (folderPath.split('/').pop() || '').trim();
+    const imgs = imagePaths.filter(p => {
+        const slash = p.indexOf('/');
+        if (slash < 0) return false;
+        const dir = p.slice(0, slash).trim();
+        return dir === folderKey;
+    });
+
+    // Fetch about.txt + more.txt then render
+    const origin = window.location.origin;
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    const encodedPath = folderPath.split('/').map(s => encodeURIComponent(s)).join('/');
+    const base = origin + pathPrefix + '/img/' + encodedPath;
+
+    Promise.all([
+        fetch(base + '/about.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
+        fetch(base + '/more.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
+    ]).then(([aboutText, moreText]) => {
+        if (!document.getElementById('mobileProjectPage')?.classList.contains('visible')) return;
+
+        // Parse about.txt
+        let name = folderKey.replace(/\s*#.*$/, '').trim();
+        const metaLines = [];
+        if (aboutText) {
+            const parts = aboutText.split('#');
+            const nameBlock = parts[0] || '';
+            const aboutBlock = parts[1] || aboutText;
+            const nm = nameBlock.match(/name:\s*\(?([^)\n\r]+)\)?/i);
+            if (nm) name = nm[1].trim();
+            const labelMap = [
+                { label: 'type',        re: /project\s*type:\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
+                { label: 'year',        re: /year:\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
+                { label: 'location',    re: /location:\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
+                { label: 'client',      re: /client:\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
+                { label: 'studio',      re: /(?:studio|agency):\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
+                { label: 'status',      re: /status:\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
+                { label: 'contributor', re: /contributor:\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
+            ];
+            labelMap.forEach(({ label, re }) => {
+                const m = aboutBlock.match(re);
+                if (m) {
+                    const val = (m[1] || m[2] || '').trim();
+                    if (val) metaLines.push({ label, val });
+                }
+            });
+        }
+
+        // Build DOM
+        // Info header
+        const header = document.createElement('div');
+        header.className = 'mpg-header';
+
+        const titleEl = document.createElement('h1');
+        titleEl.className = 'mpg-title';
+        titleEl.textContent = name.toLowerCase();
+        header.appendChild(titleEl);
+
+        if (metaLines.length) {
+            const dl = document.createElement('dl');
+            dl.className = 'mpg-meta';
+            metaLines.forEach(({ label, val }) => {
+                const row = document.createElement('div');
+                row.className = 'mpg-meta-row';
+                const dt = document.createElement('dt');
+                dt.textContent = label;
+                const dd = document.createElement('dd');
+                dd.textContent = val;
+                row.appendChild(dt);
+                row.appendChild(dd);
+                dl.appendChild(row);
+            });
+            header.appendChild(dl);
+        }
+        scroll.appendChild(header);
+
+        // More text
+        const more = (moreText || '').trim();
+        if (more) {
+            const moreEl = document.createElement('div');
+            moreEl.className = 'mpg-more';
+            more.split(/\r?\n/).filter(Boolean).forEach(line => {
+                const p = document.createElement('p');
+                p.textContent = line;
+                moreEl.appendChild(p);
+            });
+            scroll.appendChild(moreEl);
+        }
+
+        // Gallery
+        const gallery = document.createElement('div');
+        gallery.className = 'mpg-gallery';
+        imgs.forEach((imgPath, i) => {
+            const encoded = imgPath.split('/').map(s => encodeURIComponent(s)).join('/');
+            const img = document.createElement('img');
+            img.className = 'mpg-img';
+            img.src = '/img/' + encoded;
+            img.alt = '';
+            img.loading = i < 3 ? 'eager' : 'lazy';
+            img.decoding = 'async';
+            gallery.appendChild(img);
+        });
+        scroll.appendChild(gallery);
+
+        // Scroll to top
+        scroll.scrollTop = 0;
+    });
+}
+
+function hideMobileProjectPage() {
+    const page = document.getElementById('mobileProjectPage');
+    if (!page) return;
+    page.classList.remove('visible');
+    page.style.display = 'none';
+    const scroll = document.getElementById('mpgScroll');
+    if (scroll) scroll.innerHTML = '';
 }
 
 // Load and display about.txt and more.txt from folder

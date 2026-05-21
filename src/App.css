@@ -918,8 +918,15 @@ body {
     font-family: Arial, sans-serif;
     color: rgba(255, 255, 255, 0.4);
     text-align: right;
-    white-space: nowrap;
+    white-space: normal;
     flex-shrink: 0;
+    line-height: 1.5;
+}
+.project-index-year-inline {
+    display: block;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.22);
+    text-align: right;
 }
 
 .project-index-wip {
@@ -1207,22 +1214,31 @@ body {
     }
 }
 
-/* Mobile category project list (year-by-year with hashtags) */
-.mob-cat-year-group { margin-bottom: 28px; padding: 0 14px; }
-.mob-cat-year-label {
-    font-size: 10px;
-    font-family: Arial, sans-serif;
-    color: rgba(255, 255, 255, 0.3);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    margin-bottom: 6px;
+/* Mobile category year group header */
+.mob-cat-year-header {
+    width: 100%;
+    margin-bottom: 14px;
 }
-.mob-cat-divider {
+.mob-cat-year-big {
+    font-family: Arial, sans-serif;
+    font-size: 28px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.3);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 10px;
+}
+.mob-cat-year-line {
     width: 100%;
     height: 1px;
-    background: rgba(255, 255, 255, 0.08);
-    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.15);
+    margin-bottom: 14px;
 }
+
+/* Legacy refs */
+.mob-cat-year-group { margin-bottom: 28px; }
+.mob-cat-year-label { font-size: 10px; font-family: Arial, sans-serif; color: rgba(255,255,255,0.3); }
+.mob-cat-divider { width: 100%; height: 1px; background: rgba(255,255,255,0.08); }
 .mob-cat-row {
     display: flex;
     align-items: baseline;
@@ -1247,4 +1263,130 @@ body {
     white-space: nowrap;
     flex-shrink: 0;
     margin-left: auto;
+}
+
+/* Mobile LOT2-style image cards — replaces text rows in category lists */
+.mob-cat-card {
+    display: block;
+    width: 100%;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+}
+.mob-cat-card.visible {
+    opacity: 1;
+}
+.mob-cat-card:active .mob-cat-card__text {
+    opacity: 0.6;
+}
+.mob-cat-card__img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.04);
+}
+.mob-cat-card__text {
+    padding: 12px 0 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    transition: opacity 0.15s ease-out;
+}
+.mob-cat-card__name {
+    font-family: Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    color: #fff;
+    text-transform: lowercase;
+    margin-bottom: 5px;
+    line-height: 1.3;
+}
+.mob-cat-card__type {
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.38);
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+}
+
+/* ── Mobile LOT2-style project detail page ─────────────────────────────── */
+#mobileProjectPage {
+    position: fixed;
+    inset: 0;
+    z-index: 19500;
+    background: #000;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.25s ease-out;
+    pointer-events: none;
+}
+#mobileProjectPage.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+.mpg-scroll {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 52px 14px 110px;
+}
+.mpg-header {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.13);
+}
+.mpg-title {
+    font-family: Arial, sans-serif;
+    font-size: 17px;
+    font-weight: 500;
+    color: #fff;
+    text-transform: lowercase;
+    margin: 0 0 14px;
+    line-height: 1.3;
+}
+.mpg-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 0;
+}
+.mpg-meta-row {
+    display: flex;
+    gap: 14px;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.42);
+    line-height: 1.4;
+}
+.mpg-meta-row dt {
+    flex-shrink: 0;
+    min-width: 72px;
+    text-transform: lowercase;
+}
+.mpg-meta-row dd {
+    margin: 0;
+    text-transform: lowercase;
+}
+.mpg-more {
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.52);
+    line-height: 1.55;
+    margin-bottom: 24px;
+}
+.mpg-more p {
+    margin: 0 0 0.5em;
+}
+.mpg-gallery {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.mpg-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: rgba(255, 255, 255, 0.04);
 }
