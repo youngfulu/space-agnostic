@@ -920,13 +920,6 @@ body {
     text-align: right;
     white-space: normal;
     flex-shrink: 0;
-    line-height: 1.5;
-}
-.project-index-year-inline {
-    display: block;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.22);
-    text-align: right;
 }
 
 .project-index-wip {

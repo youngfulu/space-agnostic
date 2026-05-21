@@ -6161,16 +6161,7 @@ function renderProjectIndex() {
                 typeEl.textContent = 'wip';
                 typeEl.classList.add('project-index-wip');
             } else {
-                const tLine = document.createElement('span');
-                tLine.textContent = _desc;
-                typeEl.appendChild(tLine);
-                if (proj.year) {
-                    typeEl.appendChild(document.createElement('br'));
-                    const yLine = document.createElement('span');
-                    yLine.className = 'project-index-year-inline';
-                    yLine.textContent = proj.year;
-                    typeEl.appendChild(yLine);
-                }
+                typeEl.textContent = _desc;
             }
 
             row.appendChild(nameEl);
@@ -6199,6 +6190,24 @@ function renderProjectIndex() {
 
         list.appendChild(groupEl);
     });
+
+    // If any folder's metadata is still in-flight (null = pending fetch),
+    // re-render once all fetches settle so the index shows correct year/type.
+    const folders = getTopLevelFolders();
+    const hasPending = folders.some(f => (window.__PROJECT_META__ || {})[f] === null);
+    if (hasPending) {
+        function _waitAndRerender() {
+            const el = document.getElementById('projectIndex');
+            if (!el || !el.classList.contains('visible')) return; // index was closed
+            const stillPending = folders.some(f => (window.__PROJECT_META__ || {})[f] === null);
+            if (stillPending) {
+                setTimeout(_waitAndRerender, 250);
+            } else {
+                renderProjectIndex();
+            }
+        }
+        setTimeout(_waitAndRerender, 250);
+    }
 }
 
 // ——— Gallery state ———
