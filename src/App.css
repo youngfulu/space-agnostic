@@ -22,6 +22,10 @@ body {
     z-index: 1;
     position: relative;
     touch-action: none;
+    /* GPU compositing for smoother rendering */
+    will-change: transform;
+    /* Prevent browser from applying extra interpolation over our DPR-aware render */
+    image-rendering: -webkit-optimize-contrast;
 }
 
 #canvas.images-loaded {
@@ -1338,11 +1342,18 @@ body {
     inset: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 64px 14px 40px;
+    padding: 0 0 40px;
+    will-change: scroll-position;
+}
+.mpg-hero {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* Hero image starts at absolute top — back button overlays it */
 }
 .mpg-header {
-    margin-bottom: 24px;
-    padding-bottom: 20px;
+    margin: 0;
+    padding: 18px 14px 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.13);
 }
 .mpg-title {
@@ -1383,6 +1394,7 @@ body {
     color: rgba(255, 255, 255, 0.52);
     line-height: 1.55;
     margin-bottom: 24px;
+    padding: 0 14px;
 }
 .mpg-more p {
     margin: 0 0 0.5em;
