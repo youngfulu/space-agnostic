@@ -6654,6 +6654,14 @@ function _getMobileProjectPageEl() {
         el = document.createElement('div');
         el.id = 'mobileProjectPage';
         el.innerHTML = '<div class="mpg-scroll" id="mpgScroll"></div>';
+        // In-page back button: position:absolute inside the project page so its
+        // backdrop-filter blurs the scroll images (same stacking context), not the outer black.
+        const mpgBack = document.createElement('button');
+        mpgBack.id = 'mpgBackBtn';
+        mpgBack.className = 'mpg-back-btn';
+        mpgBack.textContent = 'back';
+        mpgBack.addEventListener('click', handleMobileCategoryBack);
+        el.appendChild(mpgBack);
         document.body.appendChild(el);
     }
     return el;
@@ -6670,6 +6678,12 @@ function showMobileProjectPage(folderPath) {
     page.style.opacity = '1';
     page.style.display = 'block';
     page.classList.add('visible');
+
+    // Hide the global fixed back button; show the in-page one (it blurs scroll images directly)
+    hideMobileBackButton();
+    const mpgBack = document.getElementById('mpgBackBtn');
+    if (mpgBack) mpgBack.style.display = 'flex';
+
     // Also hide old about-text overlay so it never shows on mobile
     const _pat = document.getElementById('projectAboutText');
     if (_pat) _pat.style.display = 'none';
@@ -6807,6 +6821,8 @@ function hideMobileProjectPage() {
     page.style.display = 'none';
     const scroll = document.getElementById('mpgScroll');
     if (scroll) scroll.innerHTML = '';
+    const mpgBack = document.getElementById('mpgBackBtn');
+    if (mpgBack) mpgBack.style.display = 'none';
 }
 
 // Load and display about.txt and more.txt from folder
