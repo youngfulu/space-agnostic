@@ -3782,7 +3782,8 @@ function showIndexFolderList(folders) {
                 if (item.previewPath) {
                     const imgEl = document.createElement('img');
                     imgEl.className = 'mob-cat-card__img';
-                    imgEl.src = '/img/' + item.previewPath.split('/').map(s => encodeURIComponent(s)).join('/');
+                    const _base = (window.__BASE_URL__ || '').replace(/\/$/, '');
+                    imgEl.src = _base + '/img/' + item.previewPath.split('/').map(s => encodeURIComponent(s)).join('/');
                     imgEl.alt = '';
                     imgEl.loading = 'lazy';
                     card.appendChild(imgEl);
@@ -6790,7 +6791,8 @@ function showMobileProjectPage(folderPath) {
             const encoded = imgPath.split('/').map(s => encodeURIComponent(s)).join('/');
             const img = document.createElement('img');
             img.className = 'mpg-img';
-            img.src = '/img/' + encoded;
+            const _base = (window.__BASE_URL__ || '').replace(/\/$/, '');
+            img.src = _base + '/img/' + encoded;
             img.alt = '';
             img.loading = i < 3 ? 'eager' : 'lazy';
             img.decoding = 'async';
