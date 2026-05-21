@@ -3743,7 +3743,9 @@ function showIndexFolderList(folders) {
     container.innerHTML = '';
     container.style.background = 'transparent';
     container.style.pointerEvents = 'auto';
-    
+    container.style.opacity = '1';
+    container.style.transition = '';
+
     const isMobile = isMobileDevice();
     
     if (isMobile) {
@@ -3891,10 +3893,14 @@ function showIndexFolderList(folders) {
 function hideIndexFolderList() {
     const container = document.getElementById('indexFolderList');
     if (!container) return;
-    
-    // IMMEDIATELY disable pointer events to restore touch navigation
+
+    // IMMEDIATELY disable pointer events and hide the whole container
+    // (year headers aren't .index-folder-item so they wouldn't be caught by the item fade loop —
+    //  hiding the container prevents them from bleeding over the project page)
     container.style.pointerEvents = 'none';
-    
+    container.style.opacity = '0';
+    container.style.transition = 'opacity 0.2s ease-out';
+
     // Fade out all items
     const items = container.querySelectorAll('.index-folder-item');
     items.forEach(item => {
