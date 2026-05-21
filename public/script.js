@@ -101,9 +101,16 @@ function getCanvasRect() {
 }
 
 function showMobileBackButton() {
+    // If the project page is active, show its in-page button (which blurs scroll images) instead
+    const page = document.getElementById('mobileProjectPage');
+    if (page && page.classList.contains('visible')) {
+        const mpgBack = document.getElementById('mpgBackBtn');
+        if (mpgBack) mpgBack.style.display = 'flex';
+        return;
+    }
+    // Global fixed button for non-project-page views (index list, we-are, etc.)
     const btn = document.getElementById('mobileCategoryBack');
     if (!btn) return;
-    // Force all glass-pill styles via !important so they always win over any inline or other CSS
     btn.style.setProperty('display', 'flex', 'important');
     btn.style.setProperty('position', 'fixed', 'important');
     btn.style.setProperty('left', '50%', 'important');
