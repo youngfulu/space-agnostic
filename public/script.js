@@ -108,7 +108,7 @@ function showMobileBackButton() {
     btn.style.opacity = '1';
     btn.style.visibility = 'visible';
     btn.style.position = 'fixed';
-    btn.style.zIndex = '10010';
+    btn.style.zIndex = '20001';
 }
 function hideMobileBackButton() {
     const btn = document.getElementById('mobileCategoryBack');
@@ -5620,7 +5620,7 @@ function handleMobileCategorySelect(category) {
                 mobileBack.style.right = '14px';
                 mobileBack.style.bottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
                 mobileBack.style.top = 'auto';
-                mobileBack.style.zIndex = '20000';
+                mobileBack.style.zIndex = '20001';
             }
             return;
         }
