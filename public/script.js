@@ -103,22 +103,29 @@ function getCanvasRect() {
 function showMobileBackButton() {
     const btn = document.getElementById('mobileCategoryBack');
     if (!btn) return;
+    // Force all glass-pill styles via !important so they always win over any inline or other CSS
     btn.style.setProperty('display', 'flex', 'important');
-    btn.style.pointerEvents = 'auto';
+    btn.style.setProperty('position', 'fixed', 'important');
+    btn.style.setProperty('left', '50%', 'important');
+    btn.style.setProperty('right', 'auto', 'important');
+    btn.style.setProperty('width', 'calc((100vw - 28px) / 4)', 'important');
+    btn.style.setProperty('transform', 'translateX(-50%)', 'important');
+    btn.style.setProperty('bottom', 'calc(16px + env(safe-area-inset-bottom, 0px))', 'important');
+    btn.style.setProperty('top', 'auto', 'important');
+    btn.style.setProperty('background', 'rgba(255,255,255,0.06)', 'important');
+    btn.style.setProperty('-webkit-backdrop-filter', 'blur(12px) saturate(150%) brightness(1.1)', 'important');
+    btn.style.setProperty('backdrop-filter', 'blur(12px) saturate(150%) brightness(1.1)', 'important');
+    btn.style.setProperty('border', '1px solid rgba(255,255,255,0.12)', 'important');
+    btn.style.setProperty('border-radius', '16px', 'important');
+    btn.style.setProperty('padding', '10px 16px', 'important');
+    btn.style.setProperty('color', '#fff', 'important');
+    btn.style.setProperty('font-size', '14px', 'important');
+    btn.style.setProperty('align-items', 'center', 'important');
+    btn.style.setProperty('justify-content', 'center', 'important');
+    btn.style.setProperty('z-index', '20001', 'important');
     btn.style.opacity = '1';
     btn.style.visibility = 'visible';
-    btn.style.position = 'fixed';
-    btn.style.zIndex = '20001';
-    // Remove any inline overrides so CSS can fully control appearance
-    btn.style.removeProperty('left');
-    btn.style.removeProperty('right');
-    btn.style.removeProperty('width');
-    btn.style.removeProperty('background');
-    btn.style.removeProperty('background-color');
-    btn.style.removeProperty('transform');
-    btn.style.removeProperty('border-radius');
-    btn.style.removeProperty('border');
-    btn.style.removeProperty('padding');
+    btn.style.pointerEvents = 'auto';
 }
 function hideMobileBackButton() {
     const btn = document.getElementById('mobileCategoryBack');
@@ -367,7 +374,7 @@ function markUserInteracted() {
 // Mobile selection mode layout constants
 const MOBILE_SELECTION_LEFT_MARGIN = 35; // 35px from left edge
 const MOBILE_SELECTION_VERTICAL_GAP = 35; // 35px gap between images vertically
-const MOBILE_SELECTION_TOP_PADDING = 80; // 80px top padding
+const MOBILE_SELECTION_TOP_PADDING = 32; // 32px top padding (reduced from 80 — removes black frame at top)
 const MOBILE_SELECTION_MAX_WIDTH_PERCENT = 0.65; // Max 65% of screen width
 
 // Fade out animation constants
@@ -3745,8 +3752,8 @@ function showIndexFolderList(folders) {
 
         container.style.left = '14px';
         container.style.right = '14px';
-        container.style.top = '80px';
-        container.style.bottom = '80px';
+        container.style.top = 'calc(12px + env(safe-area-inset-top, 0px))';
+        container.style.bottom = 'calc(68px + env(safe-area-inset-bottom, 0px))';
         container.style.transform = 'none';
         container.style.width = 'calc(100% - 28px)';
         container.style.alignItems = 'flex-start';
