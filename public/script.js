@@ -3756,8 +3756,8 @@ function showIndexFolderList(folders) {
     const isMobile = isMobileDevice();
     
     if (isMobile) {
-        // Dim canvas to 30% — enough for back button backdrop-filter to produce glass
-        if (canvas) canvas.style.opacity = '0.3';
+        // Canvas at 20% — gives the fixed back button something to blur for glass effect
+        if (canvas) canvas.style.opacity = '0.2';
 
         container.style.left = '14px';
         container.style.right = '14px';
@@ -3983,8 +3983,8 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
     alignedFolderPath = folderPath;
     
     if (isMobileDevice()) {
-        // Keep canvas dimly visible — back button backdrop-filter needs it to produce glass
-        if (canvas) canvas.style.opacity = '0.15';
+        // Canvas fully hidden — glass comes from wallpaper on #mobileProjectPage
+        if (canvas) canvas.style.opacity = '0';
         // Keep points hidden (don't bother laying them out on canvas for mobile)
         folderPoints.forEach(p => { p.isAligned = true; p.isInactive = true; p.targetOpacity = 0.0; });
         points.forEach(p => { p.targetOpacity = 0.0; p.isInactive = true; });
@@ -6704,6 +6704,20 @@ function showMobileProjectPage(folderPath) {
         return dir === folderKey;
     });
 
+    // Set first project image as CSS wallpaper on #mobileProjectPage.
+    // The back button sits in the gap below .mpg-scroll and blurs this image → frosted glass.
+    {
+        const _bp = (window.__BASE_URL__ || '').replace(/\/$/, '');
+        if (imgs.length) {
+            const _enc = imgs[0].split('/').map(s => encodeURIComponent(s)).join('/');
+            page.style.backgroundImage = `url('${_bp}/img/${_enc}')`;
+            page.style.backgroundSize = 'cover';
+            page.style.backgroundPosition = 'center';
+        } else {
+            page.style.backgroundImage = '';
+        }
+    }
+
     // Fetch about.txt + more.txt then render
     const origin = window.location.origin;
     const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
@@ -6826,6 +6840,7 @@ function hideMobileProjectPage() {
     if (!page) return;
     page.classList.remove('visible');
     page.style.display = 'none';
+    page.style.backgroundImage = '';
     const scroll = document.getElementById('mpgScroll');
     if (scroll) scroll.innerHTML = '';
     const mpgBack = document.getElementById('mpgBackBtn');
