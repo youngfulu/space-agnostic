@@ -147,7 +147,7 @@ function hideMobileBackButton() {
 const DEBUG = false;
 const IMAGE_LOAD_CONCURRENCY = 10; // More parallel loads so all grid images finish loading
 const INITIAL_IMAGES_TO_LOAD = 24; // Load more thumbs quickly for faster first paint
-const MOBILE_MAX_GRID_POINTS = 80; // Cap grid on mobile — 217 images kills perf on phones
+
 const MAX_LOADING_SCREEN_WAIT_MS = 120000; // Only for real hangs (2 min); do not pass to home until all images loaded
 const APP_START_TIME = performance.now();
 
@@ -2118,10 +2118,8 @@ function generatePoints(count, minDistance) {
     return points;
 }
 
-// Grid point count: cap on mobile so phones don't render 200+ images per frame
-const GRID_POINT_COUNT = isMobileDevice()
-    ? Math.min(imagePaths.length, MOBILE_MAX_GRID_POINTS)
-    : imagePaths.length;
+// Grid point count = all images
+const GRID_POINT_COUNT = imagePaths.length;
 const points = generatePoints(GRID_POINT_COUNT, 50);
 
 // Initialize current sizes and opacity for all points
