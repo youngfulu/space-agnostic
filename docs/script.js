@@ -147,6 +147,7 @@ function hideMobileBackButton() {
 const DEBUG = false;
 const IMAGE_LOAD_CONCURRENCY = 10; // More parallel loads so all grid images finish loading
 const INITIAL_IMAGES_TO_LOAD = 24; // Load more thumbs quickly for faster first paint
+const MOBILE_MAX_GRID_POINTS = 80; // Cap grid on mobile — 217 images kills perf on phones
 const MAX_LOADING_SCREEN_WAIT_MS = 120000; // Only for real hangs (2 min); do not pass to home until all images loaded
 const APP_START_TIME = performance.now();
 
@@ -1834,7 +1835,7 @@ function loadHighresOnce(originalPath) {
                 }
                 let drawable = img;
                 const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window));
-                if (!isMobile && typeof createImageBitmap === 'function' && !shouldKeepHtmlImageForCanvas(highresPath)) {
+                if (typeof createImageBitmap === 'function' && !shouldKeepHtmlImageForCanvas(highresPath)) {
                     try {
                         drawable = await createImageBitmap(img, { imageOrientation: 'from-image' });
                     } catch (_) {}
@@ -1913,7 +1914,7 @@ function loadImageOnce(path, useThumb, skipProgress) {
                 var width = img.naturalWidth;
                 var height = img.naturalHeight;
                 var isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window));
-                if (!isMobile && typeof createImageBitmap === 'function' && !isGifPath) {
+                if (typeof createImageBitmap === 'function' && !isGifPath) {
                     try {
                         var bitmap = await createImageBitmap(img, { imageOrientation: 'from-image' });
                         drawable = bitmap;
@@ -2117,8 +2118,10 @@ function generatePoints(count, minDistance) {
     return points;
 }
 
-// Grid point count: cap so all points fit with minDistance
-const GRID_POINT_COUNT = imagePaths.length;
+// Grid point count: cap on mobile so phones don't render 200+ images per frame
+const GRID_POINT_COUNT = isMobileDevice()
+    ? Math.min(imagePaths.length, MOBILE_MAX_GRID_POINTS)
+    : imagePaths.length;
 const points = generatePoints(GRID_POINT_COUNT, 50);
 
 // Initialize current sizes and opacity for all points
@@ -5018,6 +5021,12 @@ function draw() {
             const halfWidth = drawWidth / 2;
             const halfHeight = drawHeight / 2;
 
+            // Skip images fully outside the canvas viewport (no-op on GPU but saves JS overhead)
+            if (x + halfWidth < 0 || x - halfWidth > canvas.width ||
+                y + halfHeight < 0 || y - halfHeight > canvas.height) {
+                return;
+            }
+
             // Animated GIF: canvas 2d only ever paints the first frame (HTML spec). Selection/filter uses DOM <img> clones.
             const isGifHtml = shouldKeepHtmlImageForCanvas(point.imagePath) && img.nodeName === 'IMG';
             const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(point.imagePath));
@@ -5272,9 +5281,18 @@ function draw() {
 }
 
 // Animation loop (pauses when tab hidden to save CPU/battery)
-function animate() {
+let _lastDrawTime = 0;
+function animate(timestamp) {
     if (!document.hidden) {
-    draw();
+        // Cap mobile at 30 fps — halves GPU work, no visible quality loss on touch screens
+        if (isMobileDevice()) {
+            if (timestamp - _lastDrawTime >= 33) { // ~30 fps
+                _lastDrawTime = timestamp;
+                draw();
+            }
+        } else {
+            draw();
+        }
     }
     requestAnimationFrame(animate);
 }
