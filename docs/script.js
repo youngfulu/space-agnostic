@@ -5019,12 +5019,6 @@ function draw() {
             const halfWidth = drawWidth / 2;
             const halfHeight = drawHeight / 2;
 
-            // Skip images fully outside the canvas viewport (no-op on GPU but saves JS overhead)
-            if (x + halfWidth < 0 || x - halfWidth > canvas.width ||
-                y + halfHeight < 0 || y - halfHeight > canvas.height) {
-                return;
-            }
-
             // Animated GIF: canvas 2d only ever paints the first frame (HTML spec). Selection/filter uses DOM <img> clones.
             const isGifHtml = shouldKeepHtmlImageForCanvas(point.imagePath) && img.nodeName === 'IMG';
             const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(point.imagePath));
