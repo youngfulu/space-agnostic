@@ -1835,7 +1835,7 @@ function loadHighresOnce(originalPath) {
                 }
                 let drawable = img;
                 const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window));
-                if (typeof createImageBitmap === 'function' && !shouldKeepHtmlImageForCanvas(highresPath)) {
+                if (!isMobile && typeof createImageBitmap === 'function' && !shouldKeepHtmlImageForCanvas(highresPath)) {
                     try {
                         drawable = await createImageBitmap(img, { imageOrientation: 'from-image' });
                     } catch (_) {}
@@ -1914,7 +1914,7 @@ function loadImageOnce(path, useThumb, skipProgress) {
                 var width = img.naturalWidth;
                 var height = img.naturalHeight;
                 var isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window));
-                if (typeof createImageBitmap === 'function' && !isGifPath) {
+                if (!isMobile && typeof createImageBitmap === 'function' && !isGifPath) {
                     try {
                         var bitmap = await createImageBitmap(img, { imageOrientation: 'from-image' });
                         drawable = bitmap;
