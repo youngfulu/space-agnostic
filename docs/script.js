@@ -3756,8 +3756,8 @@ function showIndexFolderList(folders) {
     const isMobile = isMobileDevice();
     
     if (isMobile) {
-        // Dim canvas to 5% — list overlays it
-        if (canvas) canvas.style.opacity = '0.05';
+        // Dim canvas to 30% — enough for back button backdrop-filter to produce glass
+        if (canvas) canvas.style.opacity = '0.3';
 
         container.style.left = '14px';
         container.style.right = '14px';
@@ -3983,8 +3983,8 @@ function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = t
     alignedFolderPath = folderPath;
     
     if (isMobileDevice()) {
-        // Fade canvas to black — DOM project page takes over
-        if (canvas) canvas.style.opacity = '0';
+        // Keep canvas dimly visible — back button backdrop-filter needs it to produce glass
+        if (canvas) canvas.style.opacity = '0.15';
         // Keep points hidden (don't bother laying them out on canvas for mobile)
         folderPoints.forEach(p => { p.isAligned = true; p.isInactive = true; p.targetOpacity = 0.0; });
         points.forEach(p => { p.targetOpacity = 0.0; p.isInactive = true; });

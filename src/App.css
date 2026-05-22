@@ -1308,7 +1308,7 @@ body {
     position: fixed;
     inset: 0;
     z-index: 19500;
-    background: #000;
+    background: transparent;
     display: none;
     opacity: 0;
     transition: opacity 0.25s ease-out;
@@ -1320,7 +1320,12 @@ body {
 }
 .mpg-scroll {
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    /* Leave bottom gap so the back button's backdrop-filter sees the canvas behind */
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    background: #000;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 0;

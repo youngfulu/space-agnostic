@@ -1,7 +1,7 @@
-name: ()
+name: (ADC/DAC)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (Music and sound research)
+year: (2017-)
+Location: worldwide
+
 
