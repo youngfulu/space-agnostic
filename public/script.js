@@ -3762,7 +3762,8 @@ function showIndexFolderList(folders) {
         container.style.left = '14px';
         container.style.right = '14px';
         container.style.top = 'calc(12px + env(safe-area-inset-top, 0px))';
-        container.style.bottom = 'calc(68px + env(safe-area-inset-bottom, 0px))';
+        container.style.bottom = '0px';
+        container.style.paddingBottom = 'calc(80px + env(safe-area-inset-bottom, 0px))';
         container.style.transform = 'none';
         container.style.width = 'calc(100% - 28px)';
         container.style.alignItems = 'flex-start';

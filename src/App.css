@@ -1308,7 +1308,7 @@ body {
     position: fixed;
     inset: 0;
     z-index: 19500;
-    background: transparent;
+    background: #000 no-repeat center/cover; /* JS sets background-image = first project photo */
     display: none;
     opacity: 0;
     transition: opacity 0.25s ease-out;
@@ -1320,16 +1320,13 @@ body {
 }
 .mpg-scroll {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    /* Leave bottom gap so the back button's backdrop-filter sees the canvas behind */
-    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
-    background: #000;
+    inset: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 0;
-    will-change: scroll-position;
+    /* Fade scroll bg to transparent at bottom so #mpgBackBtn blurs the wallpaper image */
+    background: linear-gradient(to bottom, #000 calc(100% - 130px), transparent 100%);
+    padding: 0 0 calc(90px + env(safe-area-inset-bottom, 0px));
+    /* No will-change: avoids a separate compositing layer that breaks backdrop-filter in Safari */
 }
 .mpg-hero {
     display: block;
@@ -1341,6 +1338,7 @@ body {
     margin: 0;
     padding: 18px 14px 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.13);
+    background: #000; /* keep text readable inside gradient scroll bg */
 }
 .mpg-title {
     font-family: Arial, sans-serif;
@@ -1381,6 +1379,7 @@ body {
     line-height: 1.55;
     margin-bottom: 24px;
     padding: 0 14px;
+    background: #000; /* keep text readable inside gradient scroll bg */
 }
 .mpg-more p {
     margin: 0 0 0.5em;
