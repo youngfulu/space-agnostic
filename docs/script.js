@@ -544,10 +544,10 @@ function drawMobileAutoLines(ctx, now) {
         const { from, to, start, end } = line;
         const imageData1 = imageCache[from.imagePath];
         const imageData2 = imageCache[to.imagePath];
-        if (!imageData1 || !imageData2) return;
-        
-        const dims1 = calculateConnectionLineImageSize(from, imageData1);
-        const dims2 = calculateConnectionLineImageSize(to, imageData2);
+        // Use default square dims if imageData not yet loaded (mobile lazy-load)
+        const _defaultDims = { width: baseEmojiSize, height: baseEmojiSize };
+        const dims1 = imageData1 ? calculateConnectionLineImageSize(from, imageData1) : _defaultDims;
+        const dims2 = imageData2 ? calculateConnectionLineImageSize(to, imageData2) : _defaultDims;
         
         const life = end - start;
         const elapsed = now - start;
@@ -1647,14 +1647,40 @@ function loadImages() {
     totalImages = uniquePaths.length;
     imagesLoaded = 0;
     updateLoadingProgressBar();
-    
+
     if (uniquePaths.length === 0) {
         console.warn('No image paths to load.');
         checkIfReadyToShowImages();
         return;
     }
-    
+
     debugLog(`Attempting to load ${uniquePaths.length} images...`);
+
+    // MOBILE OPTIMISATION: skip thumbnail loading at startup entirely.
+    // The home screen uses a pre-rendered static JPG; thumbnails are only
+    // needed when the user enters a project.  Pre-seed imageCache with
+    // default aspect-ratio-1 entries so dotted-line animation can start
+    // immediately, then trigger actual loading on the first touch.
+    if (isMobileDevice()) {
+        uniquePaths.forEach(p => {
+            if (!imageCache[p]) {
+                imageCache[p] = { thumb: null, img: null, width: 96, height: 96, aspectRatio: 1, error: false };
+            }
+        });
+        imagesLoaded = uniquePaths.length; // treat as done for progress bar
+        checkIfReadyToShowImages();
+
+        // Lazy-load thumbnails on first interaction so project images are
+        // ready when the user taps in.
+        document.addEventListener('touchstart', function _lazyThumbLoad() {
+            document.removeEventListener('touchstart', _lazyThumbLoad);
+            loadImagesWithConcurrency(uniquePaths);
+            // Settle check (updates allImagesLoaded for selection-mode cooldown)
+            Promise.allSettled(uniquePaths.map(p => loadImageWithRetry(p, 3)))
+                .then(() => checkIfReadyToShowImages());
+        }, { once: true, passive: true });
+        return;
+    }
 
     const eagerPaths = uniquePaths.slice(0, INITIAL_IMAGES_TO_LOAD);
     const deferredPaths = uniquePaths.slice(INITIAL_IMAGES_TO_LOAD);
@@ -1664,8 +1690,7 @@ function loadImages() {
 
     // Deferred: avoid competing with main-thread startup work.
     const startDeferred = () => loadImagesWithConcurrency(deferredPaths);
-    const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-    if (!isMobile && typeof requestIdleCallback !== 'undefined') {
+    if (typeof requestIdleCallback !== 'undefined') {
         requestIdleCallback(startDeferred, { timeout: 2000 });
     } else {
         setTimeout(startDeferred, 100);
@@ -4812,8 +4837,8 @@ function draw() {
     }
 
     // Draw all points in sorted order (non-selected first, selected on top)
-    // On mobile home with static image: still iterate for state animation ticks, but skip actual draw
-    sortedPoints.forEach((point, sortIndex) => {
+    // On mobile home with static image: skip the loop entirely — nothing to animate or draw
+    if (!showStaticGrid) sortedPoints.forEach((point, sortIndex) => {
         const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
         
         // Animate opacity (optimized: skip if already at target)
@@ -5078,7 +5103,7 @@ function draw() {
                 ctx.globalAlpha = prevAlpha;
             }
         }
-    });
+    }); // end sortedPoints.forEach (skipped on mobile home with static grid)
 
     // Draw extras: images in alignedEmojis that are NOT in points[] (images not picked for the random grid)
     // The main sortedPoints loop skips them; we draw and animate them here.
