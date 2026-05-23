@@ -437,6 +437,17 @@ function isMobileDevice() {
     return window.innerWidth < 768 || ('ontouchstart' in window);
 }
 
+// Pre-rendered static grid image for mobile home screen
+let _mobileGridImg = null;
+(function() {
+    if (!isMobileDevice()) return;
+    const img = new Image();
+    img.onload = () => { _mobileGridImg = img; };
+    img.onerror = () => { _mobileGridImg = null; };
+    const base = (window.__IMAGE_BASE__ || '/img').replace(/\/$/, '');
+    img.src = base + '/mobile-grid.jpg';
+})();
+
 // ---------- Mobile auto dotted-line animation (background, non-interactive) ----------
 function rebuildMobileAutoFolders() {
     const folderMap = new Map();
@@ -4718,8 +4729,9 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw static background grid in SCREEN space (not affected by zoom/pan)
+    // Skip on mobile home when static image is used (it has a clean black background)
     const gridPattern = getGridPattern();
-    if (gridPattern) {
+    if (gridPattern && !(isMobileHome && _mobileGridImg)) {
         ctx.save();
         // Ensure identity transform so pattern doesn't inherit camera transform
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -4791,7 +4803,16 @@ function draw() {
         return a.opacity - b.opacity;
     });
     
+    // MOBILE HOME: draw pre-rendered static grid image instead of per-point thumbnails
+    const showStaticGrid = isMobileHome && !!_mobileGridImg;
+    if (showStaticGrid) {
+        // Image covers world x: [-canvas.width, canvas.width*2], y: [0, canvas.height]
+        ctx.globalAlpha = 1.0;
+        ctx.drawImage(_mobileGridImg, -canvas.width, 0, canvas.width * 3, canvas.height);
+    }
+
     // Draw all points in sorted order (non-selected first, selected on top)
+    // On mobile home with static image: still iterate for state animation ticks, but skip actual draw
     sortedPoints.forEach((point, sortIndex) => {
         const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
         
@@ -5010,7 +5031,8 @@ function draw() {
         }
         
         // Draw image if loaded, otherwise skip
-        if (img && imageData && !imageData.error) {
+        // On mobile home with static grid image: skip individual thumbnail drawing
+        if (!showStaticGrid && img && imageData && !imageData.error) {
             // Calculate dimensions maintaining aspect ratio (using helper function)
             const dims = calculateImageDrawDimensions(point, imageData, imageSize);
             const drawWidth = dims.width;
