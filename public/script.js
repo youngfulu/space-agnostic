@@ -439,13 +439,25 @@ function isMobileDevice() {
 
 // Pre-rendered static grid image for mobile home screen
 let _mobileGridImg = null;
+let _mobileGridImgReady = false; // true once loaded OR failed (so we don't block forever)
+let _mobileGridAlpha = 0.0;     // current draw opacity (animated)
 (function() {
-    if (!isMobileDevice()) return;
+    if (!isMobileDevice()) { _mobileGridImgReady = true; return; }
     const img = new Image();
-    img.onload = () => { _mobileGridImg = img; };
-    img.onerror = () => { _mobileGridImg = null; };
-    const base = (window.__IMAGE_BASE__ || '/img').replace(/\/$/, '');
-    img.src = base + '/mobile-grid.jpg';
+    img.onload = () => {
+        _mobileGridImg = img;
+        _mobileGridImgReady = true;
+        // Trigger home screen check — may now satisfy all conditions
+        if (typeof checkIfReadyToShowImages === 'function') checkIfReadyToShowImages();
+    };
+    img.onerror = () => {
+        _mobileGridImgReady = true; // failed but don't block forever
+        if (typeof checkIfReadyToShowImages === 'function') checkIfReadyToShowImages();
+    };
+    // Derive site root from __IMAGE_BASE__ (e.g. '/space-agnostic/img' → '/space-agnostic')
+    // mobile-grid.jpg lives in public/ → served at site root, not under /img/
+    const siteRoot = (window.__IMAGE_BASE__ || '/img').replace(/\/img$/, '');
+    img.src = siteRoot + '/mobile-grid.jpg';
 })();
 
 // ---------- Mobile auto dotted-line animation (background, non-interactive) ----------
@@ -532,23 +544,17 @@ function updateMobileAutoLines(now) {
 
 function drawMobileAutoLines(ctx, now) {
     if (!mobileAutoEnabled || mobileAutoLines.length === 0) return;
-    
+
     ctx.save();
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     ctx.translate(centerX + cameraPanX, centerY + cameraPanY);
     ctx.scale(globalZoomLevel, globalZoomLevel);
     ctx.translate(-centerX, -centerY);
-    
+
     mobileAutoLines.forEach(line => {
         const { from, to, start, end } = line;
-        const imageData1 = imageCache[from.imagePath];
-        const imageData2 = imageCache[to.imagePath];
-        // Use default square dims if imageData not yet loaded (mobile lazy-load)
-        const _defaultDims = { width: baseEmojiSize, height: baseEmojiSize };
-        const dims1 = imageData1 ? calculateConnectionLineImageSize(from, imageData1) : _defaultDims;
-        const dims2 = imageData2 ? calculateConnectionLineImageSize(to, imageData2) : _defaultDims;
-        
+
         const life = end - start;
         const elapsed = now - start;
         if (life <= 0 || elapsed < 0) return;
@@ -556,11 +562,15 @@ function drawMobileAutoLines(ctx, now) {
         const fadeOut = Math.min(1, Math.max(0, (end - now) / MOBILE_AUTO_LINE_FADE_OUT));
         const alpha = Math.min(fadeIn, fadeOut);
         if (alpha <= 0.01) return;
-        
+
+        // Draw center-to-center (no image edge offset needed)
         ctx.globalAlpha = alpha;
-        drawCurvedConnectionLine(ctx, from.originalBaseX, from.originalBaseY, to.originalBaseX, to.originalBaseY, dims1.width, dims1.height, dims2.width, dims2.height);
+        drawCurvedConnectionLine(ctx,
+            from.originalBaseX, from.originalBaseY,
+            to.originalBaseX, to.originalBaseY,
+            0, 0, 0, 0);
     });
-    
+
     ctx.restore();
 }
 // Helper function to calculate image draw dimensions - reduces code duplication
@@ -1519,7 +1529,9 @@ function checkIfReadyToShowImages() {
         debugLog(`Mobile checkIfReadyToShowImages: allWordsVisible=${allWordsVisible}, imagesLoaded=${imagesLoaded}/${totalImages}, allImagesLoaded=${allImagesLoaded}`);
     }
     
-    if (allWordsVisible && allImagesLoaded) {
+    // On mobile: also wait for the static grid image (mobile-grid.jpg) before revealing canvas
+    // This ensures the background is visible the moment the home screen appears
+    if (allWordsVisible && allImagesLoaded && _mobileGridImgReady) {
         // Record time when all images finished loading
         if (allImagesLoadedTime === null) {
             allImagesLoadedTime = performance.now();
@@ -4763,7 +4775,7 @@ function draw() {
     // Draw static background grid in SCREEN space (not affected by zoom/pan)
     // Skip on mobile home when static image is used (it has a clean black background)
     const gridPattern = getGridPattern();
-    if (gridPattern && !(isMobileHome && _mobileGridImg)) {
+    if (gridPattern && !isMobileDevice()) {
         ctx.save();
         // Ensure identity transform so pattern doesn't inherit camera transform
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -4835,17 +4847,28 @@ function draw() {
         return a.opacity - b.opacity;
     });
     
-    // MOBILE HOME: draw pre-rendered static grid image instead of per-point thumbnails
-    const showStaticGrid = isMobileHome && !!_mobileGridImg;
+    // MOBILE: draw pre-rendered static grid image with fade in/out (0.2s)
+    const showStaticGrid = isMobileDevice() && !!_mobileGridImg;
     if (showStaticGrid) {
-        // Image covers world x: [-canvas.width, canvas.width*2], y: [0, canvas.height]
-        ctx.globalAlpha = 1.0;
-        ctx.drawImage(_mobileGridImg, -canvas.width, 0, canvas.width * 3, canvas.height);
+        // Target: 1.0 on home, 0.0 in any section
+        const _gridTarget = isMobileHome ? 1.0 : 0.0;
+        // ~0.2s fade at 30fps = 6 frames → step ≈ 0.17 per frame
+        const _fadeStep = 0.17;
+        if (_mobileGridAlpha < _gridTarget) {
+            _mobileGridAlpha = Math.min(_gridTarget, _mobileGridAlpha + _fadeStep);
+        } else if (_mobileGridAlpha > _gridTarget) {
+            _mobileGridAlpha = Math.max(_gridTarget, _mobileGridAlpha - _fadeStep);
+        }
+        if (_mobileGridAlpha > 0.001) {
+            ctx.globalAlpha = _mobileGridAlpha;
+            ctx.drawImage(_mobileGridImg, -canvas.width, 0, canvas.width * 3, canvas.height);
+            ctx.globalAlpha = 1.0;
+        }
     }
 
     // Draw all points in sorted order (non-selected first, selected on top)
-    // On mobile home with static image: skip the loop entirely — nothing to animate or draw
-    if (!showStaticGrid) sortedPoints.forEach((point, sortIndex) => {
+    // On mobile with static image: only draw aligned (project detail) images, skip background thumbnails
+    sortedPoints.forEach((point, sortIndex) => {
         const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
         
         // Animate opacity (optimized: skip if already at target)
@@ -5063,8 +5086,9 @@ function draw() {
         }
         
         // Draw image if loaded, otherwise skip
-        // On mobile home with static grid image: skip individual thumbnail drawing
-        if (!showStaticGrid && img && imageData && !imageData.error) {
+        // On mobile: NEVER draw background thumbnails — only aligned (project detail) images
+        const skipAsBgThumb = isMobileDevice() && !point.isAligned;
+        if (!skipAsBgThumb && img && imageData && !imageData.error) {
             // Calculate dimensions maintaining aspect ratio (using helper function)
             const dims = calculateImageDrawDimensions(point, imageData, imageSize);
             const drawWidth = dims.width;
@@ -5185,9 +5209,8 @@ function draw() {
     ctx.restore();
     ctx.globalAlpha = 1.0;
     
-    // Background mobile auto-lines (non-interactive)
-    // Skip entirely on mobile home — pure static JPG, no overlay animations
-    if (!showStaticGrid) {
+    // Dotted lines over background image (mobile home only, center-to-center)
+    if (isMobileHome) {
         updateMobileAutoLines(currentTime);
         drawMobileAutoLines(ctx, currentTime);
     }
