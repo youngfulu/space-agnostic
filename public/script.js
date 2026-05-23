@@ -1670,15 +1670,20 @@ function loadImages() {
         imagesLoaded = uniquePaths.length; // treat as done for progress bar
         checkIfReadyToShowImages();
 
-        // Lazy-load thumbnails on first interaction so project images are
-        // ready when the user taps in.
-        document.addEventListener('touchstart', function _lazyThumbLoad() {
-            document.removeEventListener('touchstart', _lazyThumbLoad);
-            loadImagesWithConcurrency(uniquePaths);
-            // Settle check (updates allImagesLoaded for selection-mode cooldown)
-            Promise.allSettled(uniquePaths.map(p => loadImageWithRetry(p, 3)))
+        // Lazy-load thumbnails only when user navigates into a project/category.
+        // Triggered by showMobileProjectPage / enterSelectionModeForFolder via
+        // window.__mobileTriggerThumbLoad() to avoid any background network work
+        // while the user is on the home screen.
+        window.__mobileLazyPaths = uniquePaths;
+        window.__mobileTriggerThumbLoad = function() {
+            if (!window.__mobileLazyPaths) return;
+            const paths = window.__mobileLazyPaths;
+            window.__mobileLazyPaths = null;
+            window.__mobileTriggerThumbLoad = null;
+            loadImagesWithConcurrency(paths);
+            Promise.allSettled(paths.map(p => loadImageWithRetry(p, 3)))
                 .then(() => checkIfReadyToShowImages());
-        }, { once: true, passive: true });
+        };
         return;
     }
 
@@ -4013,6 +4018,8 @@ function selectIndexFolder(folderPath, folderName) {
 
 // Enter selection mode for a folder (called from index mode)
 function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = true) {
+    // Trigger lazy thumbnail loading the first time user enters any project
+    if (typeof window.__mobileTriggerThumbLoad === 'function') window.__mobileTriggerThumbLoad();
     const merged = mergeFolderImagesWithAllPaths(folderPath, folderPoints);
     alignedEmojiIndex =
         folderPoints[0]?.emojiIndex ??
@@ -5179,8 +5186,11 @@ function draw() {
     ctx.globalAlpha = 1.0;
     
     // Background mobile auto-lines (non-interactive)
-    updateMobileAutoLines(currentTime);
-    drawMobileAutoLines(ctx, currentTime);
+    // Skip entirely on mobile home — pure static JPG, no overlay animations
+    if (!showStaticGrid) {
+        updateMobileAutoLines(currentTime);
+        drawMobileAutoLines(ctx, currentTime);
+    }
     
     // Draw connection lines (dotted curvy lines with arrows) on hover
     if (hoveredConnectedPoints.length > 1 && hoveredLinesOpacity > 0.001) {
@@ -5631,6 +5641,8 @@ function drawMobileNavLines(svg, labels) {
 
 // Handle mobile category selection
 function handleMobileCategorySelect(category) {
+    // Trigger lazy thumbnail loading the first time user leaves home screen
+    if (typeof window.__mobileTriggerThumbLoad === 'function') window.__mobileTriggerThumbLoad();
     currentMobileCategory = category;
     
     // Keep canvas visible; we'll fade images/dotted lines instead
