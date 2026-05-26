@@ -3838,6 +3838,22 @@ function showIndexFolderList(folders) {
             setTimeout(() => showIndexFolderList(folders), 800);
             return;
         }
+        // Dedup folders by display name (case-insensitive) — keep first occurrence.
+        // Multiple folders may share the same cleanName (e.g. "Nat.sim " and
+        // "Nat.sim  #snd #sp"), which would otherwise render as visible duplicates.
+        {
+            const _seenNm = new Set();
+            folders = folders.filter(folder => {
+                const _fname = (folder.path.split('/').pop() || folder.name || '').trim();
+                const _m = (meta[_fname] && meta[_fname] !== null) ? meta[_fname] : parseProjectMeta(_fname, null);
+                const _cn = (folder.name || '').replace(/\s*#.*$/, '').trim() || folder.name || '';
+                const k = ((_m && _m.name) || _cn).toLowerCase().trim();
+                if (!k) return true;
+                if (_seenNm.has(k)) return false;
+                _seenNm.add(k);
+                return true;
+            });
+        }
         const byYear = {};
         folders.forEach(folder => {
             const fname = (folder.path.split('/').pop() || folder.name || '').trim();
@@ -6135,6 +6151,21 @@ function renderProjectIndex() {
         const m = meta[folder];
         return (m && m !== null) ? m : parseProjectMeta(folder, null);
     });
+
+    // Dedup by display name (case-insensitive). Multiple folders may share the
+    // same cleanName (e.g. "Nat.sim " and "Nat.sim  #snd #sp") — keep the first.
+    {
+        const _seenNm = new Set();
+        const _filtered = projects.filter(p => {
+            const k = ((p.name || '') + '').toLowerCase().trim();
+            if (!k) return true;
+            if (_seenNm.has(k)) return false;
+            _seenNm.add(k);
+            return true;
+        });
+        projects.length = 0;
+        Array.prototype.push.apply(projects, _filtered);
+    }
 
     projects.sort((a, b) => {
         if (a.year === null && b.year === null) return a.name.localeCompare(b.name);
