@@ -356,6 +356,18 @@ body {
     pointer-events: none;
 }
 
+/* Re-enable clicks on embedded bandcamp player + URL links inside the about block,
+   even though the wrapper has pointer-events: none (so canvas drag still works). */
+.project-about-text .bandcamp-embed-line,
+.project-about-text .bandcamp-embed-line iframe,
+.project-about-text .bandcamp-embed-wrap,
+.project-about-text .bandcamp-embed-wrap iframe,
+.project-about-text a,
+.project-about-text .info-link,
+.project-about-text .more-link {
+    pointer-events: auto;
+}
+
 .project-about-text.visible {
     opacity: 1;
 }

@@ -1272,17 +1272,21 @@ const imagePaths = [
     'Max playground/photo_2026-05-07_14-33-23.jpg',
     'Middle east/IMG_8774.jpg',
     'Middle east/Screenshot 2024-10-13 at 01.17.28.png',
+    'Morpheus #snd/Morpheus.jpg',
     'Nat.sim  #snd #sp/ComfyUI_00062_.png',
     'Nat.sim  #snd #sp/IMG_4385.jpeg',
     'Nat.sim  #snd #sp/Screenshot 2025-04-13 at 20.39.59.png',
+    'Nat.sim  #snd #sp/Screenshot 2026-05-21 at 16.12.15.png',
     'Nat.sim  #snd #sp/Spat5Move.gif',
     'Nat.sim  #snd #sp/nat.sim.gif',
     'Nat.sim  #snd #sp/photo_2025-04-13_20-02-40.jpg',
-    'Nat.sim /ComfyUI_00062_.png',
-    'Nat.sim /IMG_4385.jpeg',
-    'Nat.sim /Spat5Move.gif',
-    'Nat.sim /nat.sim.gif',
-    'Nat.sim /photo_2025-04-13_20-02-40.jpg',
+    'Obol #mat #vis/1.2.jpg',
+    'Obol #mat #vis/651115518_18085810046237178_6679816642288574301_n_2160x1440_copy.jpg',
+    'Obol #mat #vis/651922999_18085810037237178_5464649747419635139_n.jpg',
+    'Obol #mat #vis/obol glue .jpg',
+    'Obol #mat #vis/obol glue2.jpg',
+    'Obol #mat #vis/panno.png',
+    'Obol #mat #vis/pasted-image-2.png',
     'Psyche/IMG_2ACD02C483E1-1.jpeg',
     'Psyche/IMG_A3BD3A5D911A-1.jpeg',
     'Psyche/Screenshot 2024-07-27 at 15.56.50.png',
@@ -1292,11 +1296,6 @@ const imagePaths = [
     'Seen #vis/Screenshot 2026-02-03 at 16.28.31.png',
     'Seen #vis/TDMovieOut.1.png',
     'Seen #vis/fin front.png',
-    'Seen/LTX-2_00005_.gif',
-    'Seen/LTX-2_00015_.gif',
-    'Seen/Screenshot 2026-02-03 at 16.28.31.png',
-    'Seen/TDMovieOut.1.png',
-    'Seen/fin front.png',
     'Shapes/photo_2022-09-09_18-36-57.jpg',
     'Shapes/photo_2022-09-10_11-32-25.jpg',
     'Shapes/photo_2022-09-10_11-32-26.jpg',
@@ -1375,6 +1374,8 @@ const imagePaths = [
     'Zatmenie 2/pasted-image-2.jpg',
     'Zatmenie 2/pasted-image-filtered.jpeg',
     'Zatmenie 2/pasted-image.jpg',
+    'a-ring/IMG_2351.JPG',
+    'a-ring/cover.jpg',
     'cultural issues #exp #snd/bc_artist.jpg',
     'cultural issues #exp #snd/bc_last_ceremonial.jpg',
     'cultural issues #exp #snd/bc_s2.jpg',
@@ -1407,6 +1408,20 @@ const imagePaths = [
     'iced   #vis/iced.jpg',
     'iced   #vis/iced3.jpg',
     'iced   #vis/iced5.jpg',
+    'last-ceremonial/Screenshot 2025-12-22 at 14.53.33.png',
+    'last-ceremonial/cover.jpg',
+    'last-ceremonial/port scan.jpg',
+    'last-ceremonial/port-mess.jpg',
+    'last-ceremonial/portscan22.jpg',
+    'mobile-grid.jpg',
+    's2/Screenshot 2025-08-14 at 18.31.17.png',
+    's2/cover.jpg',
+    'sand-blues/cover.jpg',
+    'tilde/IMG_6522.jpg',
+    'tilde/cover.jpg',
+    'v_v/Screenshot 2025-05-08 at 11.32.27.png',
+    'v_v/Screenshot 2025-06-12 at 03.23.39.png',
+    'v_v/cover.jpg',
     'waevaev/bc_a.jpg',
     'waevaev/bc_artist.jpg',
     'waevaev/bc_tilde.jpg',
@@ -3838,22 +3853,6 @@ function showIndexFolderList(folders) {
             setTimeout(() => showIndexFolderList(folders), 800);
             return;
         }
-        // Dedup folders by display name (case-insensitive) — keep first occurrence.
-        // Multiple folders may share the same cleanName (e.g. "Nat.sim " and
-        // "Nat.sim  #snd #sp"), which would otherwise render as visible duplicates.
-        {
-            const _seenNm = new Set();
-            folders = folders.filter(folder => {
-                const _fname = (folder.path.split('/').pop() || folder.name || '').trim();
-                const _m = (meta[_fname] && meta[_fname] !== null) ? meta[_fname] : parseProjectMeta(_fname, null);
-                const _cn = (folder.name || '').replace(/\s*#.*$/, '').trim() || folder.name || '';
-                const k = ((_m && _m.name) || _cn).toLowerCase().trim();
-                if (!k) return true;
-                if (_seenNm.has(k)) return false;
-                _seenNm.add(k);
-                return true;
-            });
-        }
         const byYear = {};
         folders.forEach(folder => {
             const fname = (folder.path.split('/').pop() || folder.name || '').trim();
@@ -6027,11 +6026,26 @@ function parseProjectMeta(folderName, text) {
         if (nm) {
             const raw = stripParens(nm[1].trim());
             name = raw || cleanName;
+        } else {
+            // Bandcamp-style about.txt uses "Album:" as the title
+            const al = text.match(/^album:\s*(.+)/mi);
+            if (al) {
+                const raw = stripParens(al[1].trim());
+                if (raw) name = raw;
+            }
         }
         const yr = text.match(/^year:\s*(.+)/mi);
         if (yr) {
             const nums = yr[1].match(/\d{4}/g);
             if (nums) year = parseInt(nums[nums.length - 1]);
+        }
+        if (year === null) {
+            // Bandcamp-style: "Release date: April 20, 2023" — pull last 4-digit year
+            const rd = text.match(/^release date:\s*(.+)/mi);
+            if (rd) {
+                const nums = rd[1].match(/\d{4}/g);
+                if (nums) year = parseInt(nums[nums.length - 1]);
+            }
         }
         const pt = text.match(/^project type:\s*([^\n\r]+)/mi);
         if (pt) {
@@ -6151,21 +6165,6 @@ function renderProjectIndex() {
         const m = meta[folder];
         return (m && m !== null) ? m : parseProjectMeta(folder, null);
     });
-
-    // Dedup by display name (case-insensitive). Multiple folders may share the
-    // same cleanName (e.g. "Nat.sim " and "Nat.sim  #snd #sp") — keep the first.
-    {
-        const _seenNm = new Set();
-        const _filtered = projects.filter(p => {
-            const k = ((p.name || '') + '').toLowerCase().trim();
-            if (!k) return true;
-            if (_seenNm.has(k)) return false;
-            _seenNm.add(k);
-            return true;
-        });
-        projects.length = 0;
-        Array.prototype.push.apply(projects, _filtered);
-    }
 
     projects.sort((a, b) => {
         if (a.year === null && b.year === null) return a.name.localeCompare(b.name);
@@ -6484,20 +6483,26 @@ function _loadGalleryText(proj) {
             });
         });
 
-    fetch(base + '/more.txt')
-        .then(r => r.ok ? r.text() : null).catch(() => null)
-        .then(text => {
-            const moreEl = document.getElementById('galleryMoreText');
-            if (moreEl && text && text.trim()) {
-                moreEl.innerHTML = '';
-                text.trim().split(/\r?\n/).forEach(line => {
-                    moreEl.appendChild(makeMoreLineElement(line));
-                });
-                moreEl.style.display = '';
-            } else if (moreEl) {
-                moreEl.style.display = 'none';
-            }
-        });
+    Promise.all([
+        fetch(base + '/more.txt').then(r => r.ok ? r.text() : null).catch(() => null),
+        fetch(base + '/embed.html').then(r => r.ok ? r.text() : null).catch(() => null),
+    ]).then(([text, embedHtml]) => {
+        // Prepend embed.html (bandcamp iframe) as its own line, if present.
+        const parts = [];
+        if (embedHtml && embedHtml.trim()) parts.push(embedHtml.trim().replace(/\s+/g, ' '));
+        if (text && text.trim()) parts.push(text.trim());
+        const combined = parts.join('\n');
+        const moreEl = document.getElementById('galleryMoreText');
+        if (moreEl && combined) {
+            moreEl.innerHTML = '';
+            combined.split(/\r?\n/).forEach(line => {
+                if (line.trim()) moreEl.appendChild(makeMoreLineElement(line));
+            });
+            moreEl.style.display = '';
+        } else if (moreEl) {
+            moreEl.style.display = 'none';
+        }
+    });
 }
 
 function runAppInit() {
@@ -6851,7 +6856,8 @@ function showMobileProjectPage(folderPath) {
     Promise.all([
         fetch(base + '/about.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
         fetch(base + '/more.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
-    ]).then(([aboutText, moreText]) => {
+        fetch(base + '/embed.html').then(r => r.ok ? r.text() : '').catch(() => ''),
+    ]).then(([aboutText, moreText, embedHtml]) => {
         if (!document.getElementById('mobileProjectPage')?.classList.contains('visible')) return;
 
         // Parse about.txt
@@ -6924,6 +6930,16 @@ function showMobileProjectPage(folderPath) {
         }
         scroll.appendChild(header);
 
+        // Bandcamp embed (from embed.html) — render first if present
+        const _embed = (embedHtml || '').trim();
+        if (_embed) {
+            const embedWrap = document.createElement('div');
+            embedWrap.className = 'mpg-more';
+            const flat = _embed.replace(/\s+/g, ' ');
+            embedWrap.appendChild(makeMoreLineElement(flat));
+            scroll.appendChild(embedWrap);
+        }
+
         // More text
         const more = (moreText || '').trim();
         if (more) {
@@ -6991,10 +7007,16 @@ function loadAndDisplayAboutText(folderPath) {
     const morePromise = fetch(moreUrl).then(r => r.ok ? r.text() : null).catch(() => null);
     const extraPromise = fetch(extraUrl).then(r => r.ok ? r.text() : null).catch(() => null);
     const bcPromise = fetch(base + '/bandcamp.txt').then(r => r.ok ? r.text() : null).catch(() => null);
-    Promise.all([aboutPromise, morePromise, extraPromise, bcPromise])
-        .then(([aboutText, moreText, extraText, bcText]) => {
-            const moreContent = (moreText && moreText.trim()) || (extraText && extraText.trim()) || null;
-            parseAndDisplayAboutText(aboutText, moreContent ? (moreContent.trim()) : null);
+    const embedPromise = fetch(base + '/embed.html').then(r => r.ok ? r.text() : null).catch(() => null);
+    Promise.all([aboutPromise, morePromise, extraPromise, bcPromise, embedPromise])
+        .then(([aboutText, moreText, extraText, bcText, embedHtml]) => {
+            // Prepend embed.html (bandcamp iframe) to more content if present.
+            const moreParts = [];
+            if (embedHtml && embedHtml.trim()) moreParts.push(embedHtml.trim().replace(/\s+/g, ' '));
+            const rawMore = (moreText && moreText.trim()) || (extraText && extraText.trim()) || '';
+            if (rawMore) moreParts.push(rawMore);
+            const moreContent = moreParts.length ? moreParts.join('\n') : null;
+            parseAndDisplayAboutText(aboutText, moreContent);
             if (bcText && bcText.trim()) {
                 if (!window.__BC_URLS__) window.__BC_URLS__ = {};
                 window.__BC_URLS__[pathWithoutPrefix] = bcText.trim();
@@ -7328,7 +7350,27 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
     aboutLines.forEach((line, index) => {
         const lineEl = document.createElement('div');
         lineEl.className = 'info-line';
-        lineEl.textContent = `${line.label}: ${line.value}`;
+        // Detect URL in value → render as clickable <a>
+        const urlMatch = (line.value || '').match(/https?:\/\/[^\s]+/);
+        if (urlMatch) {
+            const url = urlMatch[0].replace(/[.,;:!)]+$/, '');
+            const before = line.value.slice(0, urlMatch.index);
+            const after  = line.value.slice(urlMatch.index + urlMatch[0].length);
+            lineEl.appendChild(document.createTextNode(`${line.label}: ${before}`));
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.className = 'info-link';
+            a.style.color = 'inherit';
+            a.style.textDecoration = 'underline';
+            try { a.textContent = new URL(url).hostname.replace('www.', '') + new URL(url).pathname; }
+            catch { a.textContent = url; }
+            lineEl.appendChild(a);
+            if (after) lineEl.appendChild(document.createTextNode(after));
+        } else {
+            lineEl.textContent = `${line.label}: ${line.value}`;
+        }
         lineEl.style.opacity = '0';
         lineEl.style.transition = aboutTransition;
         infoEl.appendChild(lineEl);

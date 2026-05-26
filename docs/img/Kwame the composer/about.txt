@@ -1,5 +1,5 @@
 name: (Kwame the composer)
-Project type: Visaul research, space and sound
+Project type: Visual research, space and sound
 Year: 2024
 Location: Paris
 Contributor: Yuri Kuznetsov

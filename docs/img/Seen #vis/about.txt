@@ -1,7 +1,7 @@
-name: ()
+name: (Seen)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (Visual research, Slope taming)
+year: (2026)
+Location: BKK
+Contributor: N. Boyak
 
