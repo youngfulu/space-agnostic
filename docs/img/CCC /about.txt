@@ -1,7 +1,7 @@
-name: ()
+name: (Casual Creative Coding)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (EDU, co-creation)
+year: (2024-2026)
+Location: Indonesia 
+Contributor: Ilya Duganov, Dini Lestari, Mik.
 

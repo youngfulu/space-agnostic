@@ -1,7 +1,6 @@
-name: ()
+name: (Definition of Power)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (sculpture, mixed-media)
+year: (2021)
+Commissioned: by GES-2, SVODI
 

@@ -1,6 +1,6 @@
 name: (Empreian Tiflis)
 #
-Project type: (2018)
+Project type: (Music Performans)
 year: (2018)
 Location: Moscow, Syntposium festival
 Contributor: Ilya Duganov, Nikolai Shizov, Alinna Tikhonova

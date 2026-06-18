@@ -1263,13 +1263,14 @@ const imagePaths = [
     'Marche Nocturn /Screenshot 2025-03-10 at 16.54.40.png',
     'Marche Nocturn /Screenshot 2025-03-10 at 16.54.51.png',
     'Marche Nocturn /mach nocturne .001.png',
+    'Max playground/Catart ibra old.png',
     'Max playground/photo_2022-06-10_00-02-48.jpg',
     'Max playground/photo_2024-03-12_08-46-15.jpg',
-    'Max playground/photo_2026-05-06_19-06-09.jpg',
     'Max playground/photo_2026-05-06_19-06-10.jpg',
     'Max playground/photo_2026-05-06_19-07-15 (2).jpg',
     'Max playground/photo_2026-05-06_19-07-15.jpg',
     'Max playground/photo_2026-05-07_14-33-23.jpg',
+    'Max playground/studio.png',
     'Middle east/IMG_8774.jpg',
     'Middle east/Screenshot 2024-10-13 at 01.17.28.png',
     'Morpheus #snd/Morpheus.jpg',
@@ -1357,6 +1358,7 @@ const imagePaths = [
     'Thresholds/liminal8.png',
     'Thresholds/pasted-image.png',
     'Thresholds/performe_th.png',
+    'Thresholds/photo_2023-09-15_22-34-48.jpg',
     'Thresholds/textured_3_1kMhVqro.jpg',
     'Thresholds/textured_4_1kMhVqro.jpg',
     'Thresholds/textured_5_1kMhVqro.jpg',
@@ -1394,14 +1396,6 @@ const imagePaths = [
     'ex_m6  #snd #pf #vis/exm_book_comp_part2.gif',
     'ex_m6  #snd #pf #vis/pasted-image-3.png',
     'ex_m6  #snd #pf #vis/photo_2024-03-03_21-39-45.jpg',
-    'extractive memories   #snd #pf #vis/2023-11-19--13-29-55.gif',
-    'extractive memories   #snd #pf #vis/2023-11-27--19-13-04.gif',
-    'extractive memories   #snd #pf #vis/2023-11-27--20-11-28.gif',
-    'extractive memories   #snd #pf #vis/2023-11-29--01-01-18.gif',
-    'extractive memories   #snd #pf #vis/2023-12-06--16-57-24.gif',
-    'extractive memories   #snd #pf #vis/2023-12-06--16-58-42-2.gif',
-    'extractive memories   #snd #pf #vis/2023-12-06--18-07-53.gif',
-    'extractive memories   #snd #pf #vis/2023-12-06--18-55-00.gif',
     'extractive memories   #snd #pf #vis/Screenshot 2024-10-13 at 03.18.05.png',
     'iced   #vis/GM-9.png',
     'iced   #vis/gula vis.jpg',
@@ -1417,8 +1411,6 @@ const imagePaths = [
     's2/Screenshot 2025-08-14 at 18.31.17.png',
     's2/cover.jpg',
     'sand-blues/cover.jpg',
-    'tilde/IMG_6522.jpg',
-    'tilde/cover.jpg',
     'v_v/Screenshot 2025-05-08 at 11.32.27.png',
     'v_v/Screenshot 2025-06-12 at 03.23.39.png',
     'v_v/cover.jpg',
@@ -1430,7 +1422,9 @@ const imagePaths = [
     'walker/6.1.jpg',
     'walker/prev-1.jpg',
     'walker/prev-2.png',
-    'walker/walker_master.gif'
+    'walker/walker_master.gif',
+    '~/IMG_6522.jpg',
+    '~/cover.jpg'
 ];
 
 // Image cache: thumb = grid (small), img = full-res (selection mode). Draw uses img || thumb.
@@ -3843,11 +3837,15 @@ function showIndexFolderList(folders) {
         container.style.setProperty('display', 'flex', 'important');
         container.style.zIndex = '20000';
 
-        // Group folders by year using cached meta; retry if still loading
+        // Group folders by year using cached meta; retry if still loading.
+        // Kick off prefetch first so meta is marked in-flight (null) rather than
+        // undefined — otherwise the race shows everything under year 0.
+        prefetchProjectMeta();
         const meta = window.__PROJECT_META__ || {};
         const anyInFlight = folders.some(folder => {
             const fname = (folder.path.split('/').pop() || folder.name || '').trim();
-            return meta[fname] === null; // null = fetch in progress
+            const v = meta[fname];
+            return v === null || v === undefined; // pending or not yet started
         });
         if (anyInFlight) {
             setTimeout(() => showIndexFolderList(folders), 800);
@@ -6158,6 +6156,12 @@ function renderProjectIndex() {
     const list = document.getElementById('projectIndexList');
     if (!list) return;
 
+    // Ensure metadata fetches are kicked off. This also synchronously marks every
+    // folder's meta as null (in-flight) so the pending check below can detect them —
+    // otherwise an index opened before prefetch starts sees `undefined`, skips the
+    // re-render, and shows every project under "—" with no year separation.
+    prefetchProjectMeta();
+
     const folders = getTopLevelFolders();
     const meta = window.__PROJECT_META__ || {};
 
@@ -6266,15 +6270,18 @@ function renderProjectIndex() {
         list.appendChild(groupEl);
     });
 
-    // If any folder's metadata is still in-flight (null = pending fetch),
+    // If any folder's metadata is still in-flight (null) or not yet started (undefined),
     // re-render once all fetches settle so the index shows correct year/type.
-    const hasPending = folders.some(f => (window.__PROJECT_META__ || {})[f] === null);
+    const _isPending = f => {
+        const v = (window.__PROJECT_META__ || {})[f];
+        return v === null || v === undefined;
+    };
+    const hasPending = folders.some(_isPending);
     if (hasPending) {
         function _waitAndRerender() {
             const el = document.getElementById('projectIndex');
             if (!el || !el.classList.contains('visible')) return; // index was closed
-            const stillPending = folders.some(f => (window.__PROJECT_META__ || {})[f] === null);
-            if (stillPending) {
+            if (folders.some(_isPending)) {
                 setTimeout(_waitAndRerender, 250);
             } else {
                 renderProjectIndex();
@@ -6486,9 +6493,12 @@ function _loadGalleryText(proj) {
     Promise.all([
         fetch(base + '/more.txt').then(r => r.ok ? r.text() : null).catch(() => null),
         fetch(base + '/embed.html').then(r => r.ok ? r.text() : null).catch(() => null),
-    ]).then(([text, embedHtml]) => {
-        // Prepend embed.html (bandcamp iframe) as its own line, if present.
+        fetch(base + '/video.txt').then(r => r.ok ? r.text() : null).catch(() => null),
+    ]).then(([text, embedHtml, videoText]) => {
+        // Prepend video facade + embed.html (bandcamp iframe) as their own lines, if present.
         const parts = [];
+        const video = parseVideoEmbed(videoText);
+        if (video) parts.push('[[VIDEO:' + video.src + '|||' + base + '/cover.jpg]]');
         if (embedHtml && embedHtml.trim()) parts.push(embedHtml.trim().replace(/\s+/g, ' '));
         if (text && text.trim()) parts.push(text.trim());
         const combined = parts.join('\n');
@@ -6857,7 +6867,8 @@ function showMobileProjectPage(folderPath) {
         fetch(base + '/about.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
         fetch(base + '/more.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
         fetch(base + '/embed.html').then(r => r.ok ? r.text() : '').catch(() => ''),
-    ]).then(([aboutText, moreText, embedHtml]) => {
+        fetch(base + '/video.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
+    ]).then(([aboutText, moreText, embedHtml, videoText]) => {
         if (!document.getElementById('mobileProjectPage')?.classList.contains('visible')) return;
 
         // Parse about.txt
@@ -6929,6 +6940,15 @@ function showMobileProjectPage(folderPath) {
             header.appendChild(dl);
         }
         scroll.appendChild(header);
+
+        // Video facade (from video.txt) — render first if present
+        const _video = parseVideoEmbed(videoText);
+        if (_video) {
+            const videoWrap = document.createElement('div');
+            videoWrap.className = 'mpg-more';
+            videoWrap.appendChild(makeMoreLineElement('[[VIDEO:' + _video.src + '|||' + _base + '/img/' + folderPath.split('/').map(s => encodeURIComponent(s)).join('/') + '/cover.jpg]]'));
+            scroll.appendChild(videoWrap);
+        }
 
         // Bandcamp embed (from embed.html) — render first if present
         const _embed = (embedHtml || '').trim();
@@ -7008,10 +7028,13 @@ function loadAndDisplayAboutText(folderPath) {
     const extraPromise = fetch(extraUrl).then(r => r.ok ? r.text() : null).catch(() => null);
     const bcPromise = fetch(base + '/bandcamp.txt').then(r => r.ok ? r.text() : null).catch(() => null);
     const embedPromise = fetch(base + '/embed.html').then(r => r.ok ? r.text() : null).catch(() => null);
-    Promise.all([aboutPromise, morePromise, extraPromise, bcPromise, embedPromise])
-        .then(([aboutText, moreText, extraText, bcText, embedHtml]) => {
-            // Prepend embed.html (bandcamp iframe) to more content if present.
+    const videoPromise = fetch(base + '/video.txt').then(r => r.ok ? r.text() : null).catch(() => null);
+    Promise.all([aboutPromise, morePromise, extraPromise, bcPromise, embedPromise, videoPromise])
+        .then(([aboutText, moreText, extraText, bcText, embedHtml, videoText]) => {
+            // Prepend video facade + embed.html (bandcamp iframe) to more content if present.
             const moreParts = [];
+            const video = parseVideoEmbed(videoText);
+            if (video) moreParts.push('[[VIDEO:' + video.src + '|||' + base + '/cover.jpg]]');
             if (embedHtml && embedHtml.trim()) moreParts.push(embedHtml.trim().replace(/\s+/g, ' '));
             const rawMore = (moreText && moreText.trim()) || (extraText && extraText.trim()) || '';
             if (rawMore) moreParts.push(rawMore);
@@ -7276,9 +7299,89 @@ function makeBandcampIframe(src, height) {
     return iframe;
 }
 
+// ── Video embed (YouTube / Vimeo) — facade poster + play icon → lightbox ──────
+// Parse a video.txt value (full URL or bare ID) into a privacy-friendly embed src.
+function parseVideoEmbed(text) {
+    if (!text) return null;
+    const raw = text.trim().split(/\r?\n/)[0].trim();
+    if (!raw) return null;
+    // YouTube: watch?v=, youtu.be/, /embed/, /shorts/
+    let m = raw.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/i);
+    if (m) return { provider: 'youtube', id: m[1], src: 'https://www.youtube-nocookie.com/embed/' + m[1] + '?rel=0&autoplay=1' };
+    // Vimeo: vimeo.com/123456789 or player.vimeo.com/video/123456789
+    m = raw.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+    if (m) return { provider: 'vimeo', id: m[1], src: 'https://player.vimeo.com/video/' + m[1] + '?autoplay=1' };
+    // Bare 11-char YouTube id
+    if (/^[\w-]{11}$/.test(raw)) return { provider: 'youtube', id: raw, src: 'https://www.youtube-nocookie.com/embed/' + raw + '?rel=0&autoplay=1' };
+    return null;
+}
+
+// Global lightbox: dim overlay + iframe; Esc / click-out to close. Iframe loads on open only.
+function openVideoLightbox(embedSrc) {
+    let overlay = document.getElementById('videoLightbox');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'videoLightbox';
+        overlay.className = 'video-lightbox';
+        const frameWrap = document.createElement('div');
+        frameWrap.className = 'video-lightbox-frame';
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'video-lightbox-close';
+        closeBtn.setAttribute('aria-label', 'Close video');
+        closeBtn.innerHTML = '&times;';
+        frameWrap.appendChild(closeBtn);
+        const inner = document.createElement('div');
+        inner.className = 'video-lightbox-inner';
+        frameWrap.appendChild(inner);
+        overlay.appendChild(frameWrap);
+        document.body.appendChild(overlay);
+        const close = () => {
+            overlay.classList.remove('visible');
+            inner.innerHTML = ''; // unload iframe → stop playback
+        };
+        closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+        overlay.__inner = inner;
+    }
+    const inner = overlay.__inner;
+    inner.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.src = embedSrc;
+    iframe.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
+    iframe.setAttribute('allowfullscreen', '');
+    inner.appendChild(iframe);
+    overlay.classList.add('visible');
+}
+
+// Build a poster facade (cover image + play button) that opens the lightbox on click.
+function makeVideoFacade(embedSrc, posterUrl) {
+    const facade = document.createElement('div');
+    facade.className = 'video-facade';
+    if (posterUrl) facade.style.backgroundImage = 'url("' + posterUrl + '")';
+    const btn = document.createElement('button');
+    btn.className = 'video-facade-play';
+    btn.setAttribute('aria-label', 'Play video');
+    btn.innerHTML = '<span class="video-facade-tri"></span>';
+    facade.appendChild(btn);
+    facade.addEventListener('click', () => openVideoLightbox(embedSrc));
+    return facade;
+}
+
 function makeMoreLineElement(lineText) {
     const el = document.createElement('div');
     el.className = 'more-line';
+
+    // 0. Video token [[VIDEO:embedSrc|||posterUrl]] — facade poster + play → lightbox
+    const videoTok = lineText.match(/^\[\[VIDEO:([\s\S]+?)\]\]$/);
+    if (videoTok) {
+        const sep = videoTok[1].indexOf('|||');
+        const embedSrc = (sep >= 0 ? videoTok[1].slice(0, sep) : videoTok[1]).trim();
+        const posterUrl = sep >= 0 ? videoTok[1].slice(sep + 3).trim() : '';
+        el.appendChild(makeVideoFacade(embedSrc, posterUrl));
+        el.classList.add('video-embed-line');
+        return el;
+    }
 
     // 1. Bandcamp <iframe> embed code pasted directly — extract src and re-skin
     const iframeMatch = lineText.match(/<iframe[^>]+src="(https:\/\/bandcamp\.com\/EmbeddedPlayer\/[^"]+)"[^>]*>/i);

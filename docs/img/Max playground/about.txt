@@ -1,7 +1,7 @@
 name: (ADC/DAC)
 #
 Project type: (Music and sound research)
-year: (2017-)
+year: ()
 Location: worldwide
 
 

@@ -1,9 +1,0 @@
-What if the cityscape could be a surface for composition?
-
-In Paris, ahead of the 2024 Olympic Games, the entire surface of the city centre was scattered with multicoloured road markings. A surgical operation underway was meant to make pedestrian Paris attractive for the flow of tourists during the Games. The city was torn apart by the noise of construction machinery, attempting to change its skin in the span of a year.
-
-Meanwhile, Yury Kuznetsov and I methodically photographed and scanned the graphic residues left by the works, to write a score of the city's reconstruction.
-
-Lines, dotted markings and extra apostrophes of a particular graphic notation literally fell underfoot of Parisians and visitors crossing the city.
-
-By writing code in TouchDesigner and Max/MSP, we made the city's markings sound.

@@ -1,7 +1,6 @@
-name: ()
+name: (2020)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (extended animation)
+year: (2020)
+Contributor: Ilya Duganov, Alinna Tikhonova 
 

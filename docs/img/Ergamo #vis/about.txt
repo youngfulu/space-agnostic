@@ -1,7 +1,7 @@
-name: ()
+name: (ERGAMO)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (short animation)
+year: (2025)
+Location: France
+
 

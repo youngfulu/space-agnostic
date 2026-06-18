@@ -3,5 +3,5 @@ name: (Zatmenie)
 Project type: (a/v Performance)
 year: (2018)
 Location: Saint-Petersburg
-Contributor: Alinna
+Contributor: Alinna Tikhonova, Duganov Ilya
 

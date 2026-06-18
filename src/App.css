@@ -362,6 +362,9 @@ body {
 .project-about-text .bandcamp-embed-line iframe,
 .project-about-text .bandcamp-embed-wrap,
 .project-about-text .bandcamp-embed-wrap iframe,
+.project-about-text .video-embed-line,
+.project-about-text .video-facade,
+.project-about-text .video-facade-play,
 .project-about-text a,
 .project-about-text .info-link,
 .project-about-text .more-link {
@@ -1118,6 +1121,113 @@ body {
 }
 .bandcamp-embed-line {
     margin-top: 8px;
+}
+
+/* ── Video facade (poster + play button) ─────────────────────────────── */
+.video-embed-line {
+    margin-top: 10px;
+    pointer-events: auto;
+}
+.video-facade {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #0a0a0a center/cover no-repeat;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.video-facade::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.18);
+    transition: background 0.2s ease;
+}
+.video-facade:hover::after {
+    background: rgba(0, 0, 0, 0.30);
+}
+.video-facade-play {
+    position: relative;
+    z-index: 2;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.video-facade:hover .video-facade-play {
+    transform: scale(1.12);
+    background: rgba(0, 0, 0, 0.7);
+}
+.video-facade-tri {
+    width: 0;
+    height: 0;
+    margin-left: 4px;
+    border-style: solid;
+    border-width: 9px 0 9px 15px;
+    border-color: transparent transparent transparent #fff;
+}
+
+/* ── Video lightbox (fullscreen overlay) ─────────────────────────────── */
+.video-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 4vmin;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.video-lightbox.visible {
+    display: flex;
+    opacity: 1;
+}
+.video-lightbox-frame {
+    position: relative;
+    width: min(92vw, 1280px);
+    max-height: 88vh;
+}
+.video-lightbox-inner {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+}
+.video-lightbox-inner iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+.video-lightbox-close {
+    position: absolute;
+    top: -42px;
+    right: 0;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 34px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 10px;
+    opacity: 0.85;
+    transition: opacity 0.15s ease;
+}
+.video-lightbox-close:hover {
+    opacity: 1;
 }
 
 /* Right panel: random image canvas */

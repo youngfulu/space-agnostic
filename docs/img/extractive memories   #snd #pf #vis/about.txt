@@ -1,7 +1,7 @@
-name: ()
+name: (Extractive_memorie_01)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (extended animation)
+year: (2023)
+Location: Marakech
+
 

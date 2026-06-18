@@ -7,3 +7,5 @@ Meanwhile, Yury Kuznetsov and I methodically photographed and scanned the graphi
 Lines, dotted markings and extra apostrophes of a particular graphic notation literally fell underfoot of Parisians and visitors crossing the city.
 
 By writing code in TouchDesigner and Max/MSP, we made the city's markings sound.
+
+

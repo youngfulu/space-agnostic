@@ -1,7 +1,7 @@
-name: ()
+name: (Psycho)
 #
-Project type: ()
-year: ()
-Location:
-Contributor: 
+Project type: (Media-object, Sculpture, computational design)
+year: (2023)
+Location: Paris
+Contributor: Alinna Tikhonova, Ilya Duganov
 
