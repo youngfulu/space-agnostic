@@ -4150,6 +4150,33 @@ function exitIndexMode() {
     }
 }
 
+// Close the web-style #projectIndex overlay on mobile and restore the mobile home
+// (grid + nav). Mirrors the tail of exitIndexMode without the folder-list teardown.
+function exitMobileIndex() {
+    isIndexMode = false;
+    indexModeTag = null;
+    indexModeFolders = [];
+    selectedIndexFolder = null;
+    currentFilterTag = null;
+
+    hideProjectIndex();
+
+    // Restore all images
+    points.forEach(p => {
+        p.targetOpacity = 1.0;
+        p.isInactive = false;
+    });
+
+    // Reset camera
+    currentZoomIndex = initialZoomIndex;
+    startZoomTransition();
+    targetCameraPanX = initialCameraPanX;
+    targetCameraPanY = initialCameraPanY;
+
+    updateBackButtonVisibility();
+    setMobileNavVisibility(true);
+}
+
 // Return to folder selection from image selection
 function returnToFolderSelection() {
     if (!isIndexMode) return;
@@ -5716,31 +5743,20 @@ function handleMobileCategorySelect(category) {
             showMobileBackButton();
             return;
         }
-        // "index" — show full project list (all folders, no tag filter)
+        // "index" — show the SAME web index section (project list grouped by year).
+        // Uses the shared #projectIndex overlay (fullscreen, already mobile-styled in CSS)
+        // so mobile matches desktop design/fonts/transitions. Its own "← explore" topbar
+        // button closes it (see indexBackBtn handler, which branches for mobile).
         if (category === 'index') {
-            const allFolders = getTopLevelFolders().map(f => ({ path: f, name: f }));
             isIndexMode = true;
             indexModeTag = null;
-            indexModeFolders = allFolders;
             selectedIndexFolder = null;
             points.forEach(p => { p.targetOpacity = 0.0; p.isInactive = true; p.isHovered = false; });
             stopMobileAutoConnections();
             mobileAutoLines = [];
             setMobileNavVisibility(false);
-            // Show mobileCategoryContent container (back button lives inside it)
-            const categoryContent = document.getElementById('mobileCategoryContent');
-            if (categoryContent) {
-                categoryContent.classList.add('visible');
-                categoryContent.style.visibility = 'visible';
-                categoryContent.style.opacity = '1';
-                categoryContent.style.pointerEvents = 'none';
-                categoryContent.style.background = 'transparent';
-            }
-            const contentInner = document.querySelector('.mobile-category-content-inner');
-            if (contentInner) { contentInner.style.display = 'none'; contentInner.style.visibility = 'hidden'; }
-            showMobileBackButton();
-            showIndexFolderList(allFolders);
-            updateBackButtonVisibility();
+            hideMobileBackButton(); // #projectIndex has its own topbar back button
+            showProjectIndex();
             return;
         }
         const categoryContent = document.getElementById('mobileCategoryContent');
@@ -6599,6 +6615,12 @@ function runAppInit() {
     const indexBackBtn = document.getElementById('indexBackBtn');
     if (indexBackBtn) {
         indexBackBtn.addEventListener('click', () => {
+            // Mobile: index is the web section over the mobile grid — fade it out and
+            // restore the mobile home (grid + nav), not desktop explore mode.
+            if (isMobileDevice()) {
+                _closeProjectIndexAnimated(() => exitMobileIndex());
+                return;
+            }
             // Animated: fade index out in 0.5s, slide about button, then stagger filter buttons in
             _closeProjectIndexAnimated(() => {
                 enterExploreMode();

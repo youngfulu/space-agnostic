@@ -962,13 +962,25 @@ body {
     }
     .project-index-list {
         padding: 60px 20px 60px 20px;
+        max-width: 100%;
     }
     .project-index-row {
         flex-direction: row;
+        align-items: baseline;
         gap: 12px;
+    }
+    /* Keep the project name intact; let the type column shrink + wrap so long
+       descriptions don't overflow off the narrow screen. */
+    .project-index-name {
+        flex-shrink: 0;
+        max-width: 55%;
     }
     .project-index-tags {
         font-size: 11px;
+        flex: 1 1 auto;
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 }
 
