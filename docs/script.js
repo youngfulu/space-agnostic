@@ -1056,6 +1056,7 @@ let isIndexMode = false; // Whether we're in index mode (showing folder list)
 let indexModeFolders = []; // Array of folder names matching current hashtag
 let selectedIndexFolder = null; // Currently selected folder in index mode
 let indexModeTag = null; // Current hashtag being filtered
+let _mobileIndexViaWebSection = false; // Mobile: project opened from the web-style #projectIndex list (so "back" returns there, not the card list)
 
 // Hashtag to category mapping
 // Folder name to tags mapping (since imagePaths don't include hashtags)
@@ -3810,9 +3811,12 @@ function filterByTag(tag) {
 
 // Show the folder list UI with staggered animation
 function showIndexFolderList(folders) {
+    // Showing the card-style list means we're in the category/card flow, not the
+    // web-style #projectIndex flow — clear the flag so "back" behaves correctly.
+    _mobileIndexViaWebSection = false;
     const container = document.getElementById('indexFolderList');
     if (!container) return;
-    
+
     // Clear existing items
     container.innerHTML = '';
     container.style.background = 'transparent';
@@ -4105,6 +4109,7 @@ function exitIndexMode() {
     indexModeFolders = [];
     selectedIndexFolder = null;
     currentFilterTag = null;
+    _mobileIndexViaWebSection = false;
     
     // Hide folder list
     hideIndexFolderList();
@@ -4158,6 +4163,7 @@ function exitMobileIndex() {
     indexModeFolders = [];
     selectedIndexFolder = null;
     currentFilterTag = null;
+    _mobileIndexViaWebSection = false;
 
     hideProjectIndex();
 
@@ -4211,6 +4217,14 @@ function returnToFolderSelection() {
         p.hoverSize = 1.0;
     });
     
+    // Mobile: if the project was opened from the web-style index list, return to
+    // THAT (the #projectIndex overlay), not the card-style folder list.
+    if (isMobileDevice() && _mobileIndexViaWebSection) {
+        hideMobileBackButton(); // #projectIndex has its own topbar back button
+        showProjectIndex();
+        return;
+    }
+
     // Re-show folder list — dim canvas again for list mode
     if (isMobileDevice() && canvas) canvas.style.opacity = '0.05';
 
@@ -6279,8 +6293,20 @@ function renderProjectIndex() {
                 });
             }
 
-            // Click: open dedicated project gallery
+            // Click: open the project view.
             row.addEventListener('click', () => {
+                if (isMobileDevice()) {
+                    // Mobile: open the SAME project page as the category flow
+                    // (spatial design, visual research, perform…) — the LOT2 DOM page,
+                    // NOT the desktop gallery. Route through the index-selection path.
+                    _mobileIndexViaWebSection = true;
+                    isIndexMode = true;
+                    indexModeTag = null;
+                    indexModeFolders = getTopLevelFolders().map(f => ({ path: f, name: f }));
+                    hideProjectIndex();
+                    selectIndexFolder(proj.folderName, proj.name);
+                    return;
+                }
                 showProjectGallery(proj);
             });
 
