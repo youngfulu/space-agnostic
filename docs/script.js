@@ -6244,6 +6244,10 @@ function renderProjectIndex() {
     const origin = (window.location && window.location.origin) || '';
     const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
 
+    // Collected preview URLs to warm the browser cache after the list is built, so
+    // the first hover over any project name shows its image instantly.
+    const _indexPreloadUrls = [];
+
     groups.forEach(group => {
         const groupEl = document.createElement('div');
         groupEl.className = 'project-index-year-group';
@@ -6280,12 +6284,20 @@ function renderProjectIndex() {
             row.appendChild(nameEl);
             row.appendChild(typeEl);
 
-            // Hover: show preview image
+            // Hover: show preview image. Use the pre-sized 900px preview (small, fits
+            // the ~644px preview box crisply) instead of the multi-MB original, and
+            // preload it below so the first hover is instant. If the preview copy is
+            // somehow missing, fall back to the full-res original once.
             if (proj.previewPath) {
                 const encodedPreview = proj.previewPath.split('/').map(s => encodeURIComponent(s)).join('/');
-                const previewSrc = origin + pathPrefix + '/img/' + encodedPreview;
+                const previewSrc = origin + pathPrefix + '/img/preview/' + encodedPreview;
+                const fullSrc = origin + pathPrefix + '/img/' + encodedPreview;
+                _indexPreloadUrls.push(previewSrc);
                 row.addEventListener('mouseenter', () => {
-                    if (previewImg) previewImg.src = previewSrc;
+                    if (previewImg) {
+                        previewImg.onerror = () => { previewImg.onerror = null; previewImg.src = fullSrc; };
+                        previewImg.src = previewSrc;
+                    }
                     if (previewEl) previewEl.classList.add('visible');
                 });
                 row.addEventListener('mouseleave', () => {
@@ -6315,6 +6327,15 @@ function renderProjectIndex() {
 
         list.appendChild(groupEl);
     });
+
+    // Warm the cache: preload every project's preview (desktop only — the preview box
+    // is hidden under 900px, so mobile never shows it). Staggered a touch so it doesn't
+    // contend with the list's own paint. Each is ~60–120KB, ~42 total.
+    if (!isMobileDevice() && _indexPreloadUrls.length) {
+        setTimeout(() => {
+            _indexPreloadUrls.forEach(u => { const im = new Image(); im.src = u; });
+        }, 150);
+    }
 
     // If any folder's metadata is still in-flight (null) or not yet started (undefined),
     // re-render once all fetches settle so the index shows correct year/type.
