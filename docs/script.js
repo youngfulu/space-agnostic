@@ -1110,9 +1110,16 @@ function getFolderTags(folderNameRaw) {
     if (hashtagTags.length > 0) {
         return hashtagTags;
     }
-    // Fallback to manual mapping using clean names (without hashtag suffixes)
+    // Fallback to manual mapping using clean names (without hashtag suffixes).
+    // Match case-insensitively so e.g. folder "Thresholds" finds map key "thresholds".
     const strippedName = folderName.replace(/\s+#.*$/, '').trim();
-    return FOLDER_TAGS[folderName] || FOLDER_TAGS[strippedName] || [];
+    if (FOLDER_TAGS[folderName]) return FOLDER_TAGS[folderName];
+    if (FOLDER_TAGS[strippedName]) return FOLDER_TAGS[strippedName];
+    const lc = strippedName.toLowerCase();
+    for (const k in FOLDER_TAGS) {
+        if (k.toLowerCase() === lc) return FOLDER_TAGS[k];
+    }
+    return [];
 }
 
 // Zoom focal point (for mouse-relative zoom)
@@ -3662,10 +3669,14 @@ function applyTagFilters() {
         points.forEach(p => { p.targetOpacity = 1.0; p.isInactive = false; });
         return;
     }
+    // Map UI tags to the folder tag vocabulary (same as filterByTag): the "spatial
+    // design" button is data-tag "install" but folders are tagged "installation".
+    // Without this, that filter matches nothing and the whole grid fades out.
+    const active = new Set([...activeTags].map(t => (t === 'install' ? 'installation' : t)));
     points.forEach(p => {
         const folderName = (p.folderPath || p.imagePath.substring(0, p.imagePath.lastIndexOf('/'))).split('/').pop().trim();
         const pTags = getFolderTags(folderName);
-        const matches = pTags.some(t => activeTags.has(t));
+        const matches = pTags.some(t => active.has(t));
         p.targetOpacity = matches ? 1.0 : 0.0;
         p.isInactive = !matches;
     });
