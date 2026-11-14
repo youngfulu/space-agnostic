@@ -4175,6 +4175,10 @@ function exitMobileIndex() {
     selectedIndexFolder = null;
     currentFilterTag = null;
     _mobileIndexViaWebSection = false;
+    // handleMobileCategorySelect('index') set this to 'index'; the mobile draw loop
+    // keeps the home grid hidden while it is non-null, so clear it or the grid stays
+    // black after returning to the home screen.
+    currentMobileCategory = null;
 
     hideProjectIndex();
 
