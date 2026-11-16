@@ -1,0 +1,6 @@
+CCC — Creative Coding Community
+
+CCC est une initiative pédagogique éphémère et en accès libre que j'ai développée à Yogyakarta, Surabaya et Denpasar. L'objectif du programme est de rendre la créativité numérique accessible en constituant une boîte à outils fondée entièrement sur ce que les communautés locales ont déjà sous la main. Au fil de sessions pratiques autour des outils audiovisuels, du creative coding et des bases de la programmation, les participants apprennent à transformer la technologie du quotidien en médium d'expression artistique.
+
+
+L'édition 2024 s'est conclue par une exposition collective à Bali, produite en collaboration avec plusieurs ONG locales. CCC met l'accent sur l'autonomisation, la durabilité et l'auctorialité partagée — en apportant aux participants non seulement de nouvelles compétences techniques, mais aussi la confiance nécessaire pour prendre part au paysage plus large des médias numériques.

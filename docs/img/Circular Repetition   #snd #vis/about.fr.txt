@@ -1,0 +1,9 @@
+name: (Circular Repetition)
+#
+Project type: (Installation, Audio spatial)
+Year: (2019)
+Location: (Venise, Italie)
+Client:(Fondation Heydar Aliyev)
+Agency:(Media Materia)
+Status: (Terminé)
+Contributor: (Ilya Duganov, Vadim Epstein)

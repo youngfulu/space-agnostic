@@ -1,0 +1,6 @@
+name: (Zatmenie)
+#
+Project type: (performance A/V)
+year: (2018)
+Location: Saint-Pétersbourg
+Contributor: Alinna Tikhonova, Duganov Ilya

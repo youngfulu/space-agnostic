@@ -1,0 +1,6 @@
+name: (Nat.Sim)
+#
+Project type: (Partition musicale, Simulation)
+year: (2025)
+Location: Salzbourg
+Contributor: Ilya Duganov, Artem Slesarev.

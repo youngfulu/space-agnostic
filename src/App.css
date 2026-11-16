@@ -186,6 +186,15 @@ body {
     }
 }
 
+.filter-button[data-lang],
+.filter-button[data-lang]:hover {
+    opacity: 0.5;
+}
+
+.filter-button[data-lang].lang-active {
+    opacity: 1;
+}
+
 .back-button:hover {
     opacity: 0.7;
 }
@@ -354,6 +363,35 @@ body {
     opacity: 0;
     transition: opacity 0.25s ease-out;
     pointer-events: none;
+}
+
+/* Long project text (or a player + tracklist) scrolls inside its own block instead of
+   being cut off at the bottom of the screen. */
+.project-about-text .project-more {
+    pointer-events: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+    padding-right: 10px;
+}
+
+.project-about-text .project-more::-webkit-scrollbar {
+    width: 4px;
+}
+
+.project-about-text .project-more::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 2px;
+}
+
+.project-about-text .project-more::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Soft fade where more text continues below */
+.project-about-text .project-more.has-more-below {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
 }
 
 /* Re-enable clicks on embedded bandcamp player + URL links inside the about block,
@@ -569,6 +607,34 @@ body {
     .mobile-nav-label:hover,
     .mobile-nav-label:active {
         opacity: 0.6;
+    }
+    .mobile-homepage-nav .mobile-lang {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        top: 50%;
+        right: calc(8px + env(safe-area-inset-right, 0px));
+        transform: translateY(-50%);
+        z-index: 10003;
+    }
+    .mobile-lang-btn {
+        color: #fff;
+        font-size: 13px;
+        font-family: Arial, sans-serif;
+        text-transform: lowercase;
+        letter-spacing: 0.02em;
+        line-height: 1.4;
+        padding: 8px;
+        opacity: 0.55;
+        cursor: pointer;
+        pointer-events: auto;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        transition: opacity 0.2s ease;
+    }
+    .mobile-lang-btn.lang-active {
+        opacity: 1;
     }
     #canvas.mobile-grid-fade-out {
         opacity: 0;
@@ -860,6 +926,36 @@ body {
 
 .project-index-back-btn:hover {
     opacity: 0.55;
+}
+
+/* EN / FR in the index top bar (same switch as the explore header) */
+.project-index-lang {
+    display: flex;
+    gap: 12px;
+    margin-right: 28px;
+    pointer-events: auto;
+}
+
+.project-index-lang-btn {
+    color: #fff;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+    text-transform: lowercase;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    opacity: 0.5;
+    transition: opacity 0.2s ease-out;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.project-index-lang-btn.lang-active {
+    opacity: 1;
+}
+
+/* EN / FR on the mobile home screen: right edge, vertically centred */
+.mobile-lang {
+    display: none;
 }
 
 /* "index" button visible in explore mode — mirrors the index back-btn */

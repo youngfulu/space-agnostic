@@ -1,0 +1,5 @@
+name: (Marche Nocturn)
+Project type:  recherche visuelle, analyse audio
+Year: 2024
+Location: Bourges
+Contributor: Boris Shershenkov

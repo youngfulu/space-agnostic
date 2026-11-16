@@ -43,7 +43,10 @@ function App() {
       });
 
     const scriptBase = base.startsWith('/') ? (window.location.origin || '') + base : base;
-    const bust = '?v=' + Date.now();
+    // One cache key per build (set in vite.config.js), so returning visitors reuse the
+    // cached scripts until the next deploy. Dev always loads fresh.
+    const buildId = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
+    const bust = '?v=' + (buildId === 'dev' ? Date.now() : buildId);
     loadScript(scriptBase + 'about.js' + bust)
       .then(() => loadScript(scriptBase + 'script.js' + bust))
       .catch((err) => console.error('Script load error:', err));
@@ -77,6 +80,10 @@ function App() {
 
       <div id="projectIndex" className="project-index">
         <div className="project-index-topbar">
+          <span className="project-index-lang">
+            <span className="project-index-lang-btn" data-lang="en">en</span>
+            <span className="project-index-lang-btn" data-lang="fr">fr</span>
+          </span>
           <span id="indexBackBtn" className="project-index-back-btn">← explore</span>
         </div>
         <div id="projectIndexList" className="project-index-list"></div>
@@ -154,6 +161,10 @@ function App() {
           <div className="mobile-nav-label" data-category="spatial">perform</div>
           <div className="mobile-nav-label" data-category="index">index</div>
           <div className="mobile-nav-label" data-category="materiality">materiality</div>
+        </div>
+        <div className="mobile-lang">
+          <span className="mobile-lang-btn" data-lang="en">en</span>
+          <span className="mobile-lang-btn" data-lang="fr">fr</span>
         </div>
       </div>
 

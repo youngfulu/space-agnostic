@@ -1,0 +1,9 @@
+Et si le paysage urbain pouvait devenir une surface de composition ?
+
+À Paris, à l'approche des Jeux olympiques de 2024, toute la surface du centre-ville s'est retrouvée parsemée de marquages routiers multicolores. Une opération chirurgicale en cours devait rendre le Paris piéton attrayant pour le flux de touristes pendant les Jeux. La ville était déchirée par le bruit des engins de chantier, tentant de changer de peau en l'espace d'un an.
+
+Pendant ce temps, Yury Kuznetsov et moi avons méthodiquement photographié et scanné les résidus graphiques laissés par les travaux, pour écrire une partition de la reconstruction de la ville.
+
+Lignes, pointillés et apostrophes en trop d'une notation graphique singulière tombaient littéralement sous les pieds des Parisiens et des visiteurs qui traversaient la ville.
+
+En écrivant du code dans TouchDesigner et Max/MSP, nous avons fait sonner les marquages de la ville.

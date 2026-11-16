@@ -1,0 +1,7 @@
+name: (Thresholds)
+#
+Project type: (Installation, Design spatial)
+year: (2023)
+Location: Utrecht, Pays-Bas
+Commissioned: (Uncloud Festival)
+Contributor: (Ilya Duganov, Alina Tikhonova)

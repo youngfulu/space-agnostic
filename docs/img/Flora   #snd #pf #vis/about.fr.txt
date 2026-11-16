@@ -1,0 +1,5 @@
+name: (Flora)
+#
+Project type: (Animation étendue)
+year: (2020)
+Contributor: Alinna Tikhonova, Ilya Duganov

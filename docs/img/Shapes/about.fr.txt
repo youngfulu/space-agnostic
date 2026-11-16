@@ -1,0 +1,4 @@
+name: (série de formes)
+#
+Project type: (design spatial, matérialité)
+year: (2018-2019)

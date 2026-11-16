@@ -1,0 +1,6 @@
+name: (Obol)
+#
+Project type: (Recherche visuelle, Matière)
+year: (2025)
+Location: Japon, Tokyo
+Contributor: Alinna Tikhonova, Andrius Arutiunian, Ilya Duganov

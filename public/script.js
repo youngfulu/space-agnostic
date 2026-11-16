@@ -18,10 +18,278 @@ function ensureImageBase() {
 }
 ensureImageBase();
 
-// Locale for about text (EN/FR) - about.js defines ABOUT_TEXT and ABOUT_TEXT_FR
+// ── Locale (EN / FR) ─────────────────────────────────────────────────────────
+// The chosen language is remembered per browser. UI strings are translated through
+// t(); project texts come from about.fr.txt / more.fr.txt next to the English files
+// (see fetchProjectText). about.js defines ABOUT_TEXT and ABOUT_TEXT_FR.
+const LOCALE_STORAGE_KEY = 'spaceAgnosticLocale';
 if (typeof window !== 'undefined') {
-    window.__LOCALE__ = window.__LOCALE__ || 'en';
+    let storedLocale = null;
+    try { storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY); } catch (_) {}
+    window.__LOCALE__ = (storedLocale === 'fr' || storedLocale === 'en') ? storedLocale : (window.__LOCALE__ || 'en');
+    if (document.documentElement) document.documentElement.lang = window.__LOCALE__;
 }
+
+// French UI strings, keyed by the English string used in the markup / code.
+const I18N_FR = {
+    // navigation
+    'about': 'à propos',
+    'visual research': 'recherche visuelle',
+    'spatial design': 'design spatial',
+    'sonic core': 'cœur sonore',
+    'materiality': 'matérialité',
+    'perform': 'performance',
+    'index': 'index',
+    'explore': 'explorer',
+    'back': 'retour',
+    '← back': '← retour',
+    '← explore': '← explorer',
+    '← index': '← index',
+    'index →': 'index →',
+    'contact': 'contact',
+    // loading screen
+    'Welcome to Spatial Playground': 'Bienvenue dans Spatial Playground',
+    // index
+    'project type': 'type de projet',
+    'wip': 'en cours',
+    'music': 'musique',
+    'projects': 'projets',
+    // project field labels (keys of about.txt)
+    'project': 'projet',
+    'type': 'type',
+    'client': 'client',
+    'studio': 'studio',
+    'year': 'année',
+    'location': 'lieu',
+    'status': 'statut',
+    'project status': 'statut du projet',
+    'contributor': 'crédits',
+    'contributors': 'crédits',
+    'commissioned': 'commande',
+    'commissioned by': 'commande',
+    'tags': 'mots-clés',
+    'artist': 'artiste',
+    'album': 'album',
+    'release date': 'date de sortie',
+    'description': 'description',
+    'tracklist': 'titres',
+    'url': 'url',
+    'title': 'titre',
+    'date': 'date',
+    'likes': 'mentions j’aime',
+    'views': 'vues',
+    'duration': 'durée',
+    'product type': 'type de produit',
+    'files': 'fichiers',
+    // accessibility labels
+    'prev': 'précédent',
+    'next': 'suivant',
+    'Close video': 'Fermer la vidéo',
+    'Play video': 'Lire la vidéo',
+};
+
+function getLocale() {
+    return (typeof window !== 'undefined' && window.__LOCALE__ === 'fr') ? 'fr' : 'en';
+}
+
+// Translate a UI string. Unknown strings pass through unchanged.
+function t(str) {
+    if (getLocale() !== 'fr' || typeof str !== 'string') return str;
+    if (Object.prototype.hasOwnProperty.call(I18N_FR, str)) return I18N_FR[str];
+    const lower = str.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(I18N_FR, lower) ? I18N_FR[lower] : str;
+}
+
+// "label: value" — French typography puts a (non-breaking) space before the colon.
+// (see the comment above) Known labels are translated; anything unrecognised is left
+// exactly as written in the file.
+function labelValue(label, value) {
+    if (getLocale() === 'fr' && Object.prototype.hasOwnProperty.call(I18N_FR, String(label).toLowerCase())) {
+        return t(label) + '\u00A0: ' + value;
+    }
+    return label + ': ' + value;
+}
+
+// Project title from an about text: "name:" (parentheses optional), else a Bandcamp-style
+// "Album:" line, else the fallback.
+function parseProjectTitle(nameBlock, fullText, fallback) {
+    const withParens = nameBlock.match(/^\s*name:\s*\(([^)]+)\)/mi);
+    if (withParens) return withParens[1].trim();
+    const plain = nameBlock.match(/^\s*name:\s*([^\n\r]+)/mi);
+    if (plain && plain[1].trim()) return plain[1].trim();
+    const album = (fullText || '').match(/^\s*album:\s*([^\n\r]+)/mi);
+    if (album && album[1].trim()) return album[1].trim();
+    return fallback;
+}
+
+// ── Project texts ────────────────────────────────────────────────────────────
+// All projects' text files (about / more in both languages, embeds, bandcamp links) come
+// in ONE request: img/_content.json, built by scripts/build-content-bundle.js. Without
+// the bundle each file is fetched on its own, once.
+const projectContent = { bundle: undefined, bundlePromise: null, files: new Map() };
+
+function getImgBaseUrl() {
+    const origin = (window.location && window.location.origin) || '';
+    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    return origin + pathPrefix + '/img';
+}
+
+function encodeFolderPath(folderPath) {
+    return String(folderPath || '').replace(/^final images\//, '').split('/').map(s => encodeURIComponent(s)).join('/');
+}
+
+// A static host with a catch-all route answers "missing file" with the site's own HTML
+function looksLikeHtmlDocument(text) {
+    return /^\s*<(?:!doctype|html)\b/i.test(text || '');
+}
+
+function loadContentBundle() {
+    if (!projectContent.bundlePromise) {
+        projectContent.bundlePromise = fetch(getImgBaseUrl() + '/_content.json')
+            .then(r => (r.ok ? r.json() : null))
+            .catch(() => null)
+            .then(json => {
+                projectContent.bundle = (json && typeof json === 'object' && !Array.isArray(json)) ? json : null;
+                return projectContent.bundle;
+            });
+    }
+    return projectContent.bundlePromise;
+}
+
+// One text file of a project ("about.txt", "more.fr.txt", "embed.html", …) → string | null
+function fetchProjectFile(folderPath, fileName) {
+    const folder = String(folderPath || '').replace(/^final images\//, '');
+    return loadContentBundle().then(bundle => {
+        if (bundle) {
+            const files = bundle[folder.normalize('NFC')] || bundle[folder];
+            const text = files ? files[fileName.toLowerCase()] : undefined;
+            return typeof text === 'string' ? text : null;
+        }
+        const key = folder + '/' + fileName;
+        if (!projectContent.files.has(key)) {
+            projectContent.files.set(key, fetch(getImgBaseUrl() + '/' + encodeFolderPath(folder) + '/' + fileName)
+                .then(r => (r.ok ? r.text() : null))
+                .catch(() => null)
+                .then(text => (text && !looksLikeHtmlDocument(text)) ? text : null));
+        }
+        return projectContent.files.get(key);
+    });
+}
+
+// A project's "about" / "more" / "extra" text in the current language. French lives in
+// about.fr.txt / more.fr.txt beside the English file; a project without one shows English.
+function fetchProjectText(folderPath, baseName) {
+    if (getLocale() === 'fr') {
+        return fetchProjectFile(folderPath, baseName + '.fr.txt')
+            .then(text => (text && text.trim()) ? text : fetchProjectFile(folderPath, baseName + '.txt'));
+    }
+    return fetchProjectFile(folderPath, baseName + '.txt');
+}
+
+// ── Static UI strings ────────────────────────────────────────────────────────
+const FILTER_TAG_LABELS = { stage: 'visual research', install: 'spatial design', tech: 'sonic core', concept: 'materiality', spatial: 'perform' };
+const MOBILE_NAV_LABELS = { 'we-are': 'about', install: 'spatial design', tech: 'sonic core', stage: 'visual research', spatial: 'perform', index: 'index', materiality: 'materiality' };
+const STATIC_LABELS = [
+    ['choiceExplore', 'explore'],
+    ['choiceIndex', 'index'],
+    ['indexBackBtn', '← explore'],
+    ['galleryBackBtn', '← index'],
+    ['exploreIndexBtn', 'index →'],
+    ['weAreButton', 'about'],
+    ['backButton', '← back'],
+    ['mobileCategoryBack', 'back'],
+    ['mpgBackBtn', 'back'],
+];
+const STATIC_ARIA_LABELS = [
+    ['galleryPrevBtn', 'prev'], ['galleryNextBtn', 'next'],
+    ['selectionPrevBtn', 'prev'], ['selectionNextBtn', 'next'],
+];
+
+// Put the current language into the markup that React rendered once (labels never change
+// from React's side afterwards, so setting their text here is safe).
+function applyStaticTranslations() {
+    if (typeof document === 'undefined') return;
+    STATIC_LABELS.forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = t(text);
+    });
+    STATIC_ARIA_LABELS.forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('aria-label', t(text));
+    });
+    document.querySelectorAll('.filter-button[data-tag]').forEach(btn => {
+        const label = FILTER_TAG_LABELS[btn.getAttribute('data-tag')];
+        if (label) btn.textContent = t(label);
+    });
+    document.querySelectorAll('.mobile-nav-label[data-category]').forEach(label => {
+        const text = MOBILE_NAV_LABELS[label.getAttribute('data-category')];
+        if (text) label.textContent = t(text);
+    });
+    document.querySelectorAll('[data-lang]').forEach(el => {
+        // Styling (dimmed unless active) is in CSS so the header's fade animations, which
+        // set and clear inline opacity, cannot wipe it.
+        el.classList.toggle('lang-active', el.getAttribute('data-lang') === getLocale());
+    });
+}
+
+// Switch language: every piece of text on screen is re-rendered in the new language.
+function setLocale(locale) {
+    locale = locale === 'fr' ? 'fr' : 'en';
+    if (window.__LOCALE__ === locale) return;
+    window.__LOCALE__ = locale;
+    try { window.localStorage.setItem(LOCALE_STORAGE_KEY, locale); } catch (_) {}
+    if (document.documentElement) document.documentElement.lang = locale;
+    window.__PROJECT_META__ = {}; // names / types / years are parsed per language
+    refreshLocalizedViews();
+}
+
+function refreshLocalizedViews() {
+    applyStaticTranslations();
+    const mobile = isMobileDevice();
+
+    if (!mobile) {
+        positionFilterButtons(); // label widths changed
+    } else {
+        const nav = document.getElementById('mobileHomepageNav');
+        const lines = document.getElementById('mobileNavLines');
+        const labels = nav ? nav.querySelectorAll('.mobile-nav-label') : [];
+        if (lines && labels.length && isMobileVersion) drawMobileNavLines(lines, labels);
+    }
+
+    // About panel
+    if (isWeAreMode && !mobile) showWeAreAbout();
+    else if (currentMobileCategory === 'we-are') showMobileCategoryContent('we-are');
+
+    // Index list (names, project types, column header)
+    prefetchProjectMeta();
+    const indexEl = document.getElementById('projectIndex');
+    if (indexEl && indexEl.classList.contains('visible')) renderProjectIndex();
+
+    // Gallery opened from the index
+    if (_galleryCurrentProj) {
+        const folder = _galleryCurrentProj.folderName;
+        fetchProjectText(folder, 'about').then(text => {
+            if (!_galleryCurrentProj || _galleryCurrentProj.folderName !== folder) return;
+            _galleryCurrentProj = parseProjectMeta(folder, text);
+            renderGalleryHeader(_galleryCurrentProj);
+        });
+        _loadGalleryText(_galleryCurrentProj);
+    }
+
+    // Project open on the canvas (desktop)
+    if (!mobile && alignedEmojiIndex !== null && alignedFolderPath) loadAndDisplayAboutText(alignedFolderPath);
+
+    // Mobile project page / category card list
+    if (mobile) {
+        const page = document.getElementById('mobileProjectPage');
+        if (page && page.classList.contains('visible') && _mobileProjectFolder) {
+            showMobileProjectPage(_mobileProjectFolder);
+        } else if (isIndexMode && selectedIndexFolder === null && !_mobileIndexViaWebSection && indexModeFolders.length) {
+            showIndexFolderList(indexModeFolders);
+        }
+    }
+}
+
 function getAboutText() {
     return (typeof window !== 'undefined' && window.__LOCALE__ === 'fr' && typeof ABOUT_TEXT_FR !== 'undefined')
         ? ABOUT_TEXT_FR : (typeof ABOUT_TEXT !== 'undefined' ? ABOUT_TEXT : '');
@@ -155,6 +423,17 @@ function debugLog(...args) {
     if (DEBUG) console.log(...args);
 }
 
+// Background grid pattern cache (rebuilt when the pixel ratio changes)
+let gridPatternDesktop = null;
+let gridPatternMobile = null;
+
+// Logical (CSS-pixel) size of the canvas. All layout / hit-testing maths uses these;
+// the backing store is larger by canvasDpr so images are drawn at the screen's real
+// resolution instead of being upscaled by the browser.
+let viewW = 0;
+let viewH = 0;
+let canvasDpr = 1;
+
 // Set canvas size
 function resizeCanvas() {
     if (!canvas) {
@@ -162,8 +441,15 @@ function resizeCanvas() {
         return;
     }
     const { width, height } = getViewportSize();
-    canvas.width = width;
-    canvas.height = height;
+    viewW = width;
+    viewH = height;
+    // Desktop: render at device resolution (capped at 2x). Mobile keeps 1x — its home
+    // screen is a pre-rendered image and its frame budget is tuned for that.
+    canvasDpr = isMobileDevice() ? 1 : Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+    canvas.width = Math.max(1, Math.round(width * canvasDpr));
+    canvas.height = Math.max(1, Math.round(height * canvasDpr));
+    gridPatternDesktop = null; // tile is built per pixel ratio
+    gridPatternMobile = null;
 }
 // Only resize if canvas is available (single initial run; resize handler is in runAppInit with rAF debounce)
 if (canvas) {
@@ -175,7 +461,7 @@ const baseEmojiSize = 96; // Base size for layer_1 (4x larger: 24 * 4 = 96)
 const layer2SizeMultiplier = 1 / 1.6; // Layer_2 is 1.6 times smaller
 const hoverZoom = 1.0 + (2.0 - 1.0) / 3.0; // Zoom factor on hover (smaller zoom in: 1.33x instead of 2.0x)
 const hoverZoomTransitionDuration = 500; // Transition duration in milliseconds (0.5 seconds)
-const alignmentAnimationDuration = 1200; // Animation duration in milliseconds (1.2 seconds - matches phase 1)
+const alignmentAnimationDuration = 1200; // Flight duration for images without their own flightDuration (mobile)
 const alignedSizeMultiplier = 7.0; // Size multiplier when aligned (7x larger)
 const panSmoothness = 0.09; // Smoothness factor for camera pan interpolation (2x slower for smoother feel)
 const SELECTION_PAN_SMOOTHNESS = 0.045; // Slower, smoother pan in image selection mode (next/prev)
@@ -188,8 +474,8 @@ const opacitySmoothness = 0.08; // Linear fade: ~1 second at 60fps (2x slower)
 const INDEX_MODE_FADE_SPEED = 0.04; // Slower fade for index mode: ~2 seconds at 60fps
 
 // Mouse/touch position
-let mouseX = canvas ? canvas.width / 2 : window.innerWidth / 2;
-let mouseY = canvas ? canvas.height / 2 : window.innerHeight / 2;
+let mouseX = canvas ? viewW / 2 : window.innerWidth / 2;
+let mouseY = canvas ? viewH / 2 : window.innerHeight / 2;
 let targetMouseX = mouseX;
 let targetMouseY = mouseY;
 
@@ -247,7 +533,7 @@ let lastDrawTimeForCarousel = 0;
 function setMobileNavVisibility(visible) {
     const mobileNav = document.getElementById('mobileHomepageNav');
     if (!mobileNav) return;
-    const labels = mobileNav.querySelectorAll('.mobile-nav-label');
+    const labels = mobileNav.querySelectorAll('.mobile-nav-label, .mobile-lang-btn');
     if (visible) {
         mobileNav.classList.add('visible');
         mobileNav.style.opacity = '1';
@@ -279,26 +565,23 @@ function resetMobileSelectionLayout() {
     });
 }
 
-// Selection animation state (desktop only):
-// Phase 1: Zoom out + images move to grid + others fade out (1.2s)
-// Phase 1.5: Delay (0.25s)
-// Phase 2: Zoom in to leftmost image (1.2s)
-// Phase -1: Reverse - zoom out to show full grid + images start moving back (1.2s)
-// Phase -2: Reverse - zoom to 1.0 + images finish moving back (1.2s)
+// Selection animation state (desktop only). One continuous eased camera move each way:
+//   phase  1 — into the project row: zoom + pan straight to the clicked image while the
+//              images fly from the grid into the row
+//   phase -1 — back out: zoom to 1 and pan home while the images fly back to the grid
+//   phase  0 — idle (camera follows drag / wheel / carousel)
 let selectionAnimationPhase = 0;
 let selectionPhaseStartTime = 0;
-const SELECTION_PHASE1_DURATION = 1200; // 1.2 seconds for phase 1
-const SELECTION_PHASE_DELAY = 250; // 0.25 seconds delay between phase 1 and 2
-const SELECTION_PHASE2_DURATION = 1140; // ~5% faster than 1200ms for pan to final carousel position
+const SELECTION_ENTER_DURATION = 1350; // ms
+const SELECTION_EXIT_DURATION = 1200;  // ms
+const SELECTION_RELAYOUT_DURATION = 500; // ms — settle after an image's real proportions arrive
+const SELECTION_ROW_HEIGHT_FRACTION = 2 / 3; // project row height as a fraction of the viewport
 let selectionStartZoom = 1.0;
-let selectionTargetZoomOut = 1.0;
 let selectionTargetZoomIn = 1.0;
 let selectionStartPanX = 0;
 let selectionStartPanY = 0;
-let selectionZoomOutPanX = 0;
 let selectionFinalPanX = 0;
-let selectionZoomOutExit = 1.0; // Zoom level for exit phase -1 (20% closer than selectionTargetZoomOut)
-// Point to focus on in phase 2: if set (from grid click), pan to it; if null (from menu), pick center-closest
+// Point to focus on when entering: if set (from grid click), pan to it; if null (from menu), pick center-closest
 let selectionFocusPointForPhase2 = null;
 let selectionFocusIndexStored = null; // preserved for relayout so pan does not jump
 
@@ -312,16 +595,42 @@ let selectionMoreFixedLeftPx = null;
 // True once we've started phase 1 for this alignment; prevents relayout-after-load from restarting animation
 let selectionAnimationHasRunForCurrentAlignment = false;
 
-// Exponential easing with tiny inertia at the end for natural, smooth feel
-// Overshoots slightly then settles back
-function easeOutExpoInertia(t) {
-    if (t >= 1) return 1;
-    // Exponential ease out
-    const expo = 1 - Math.pow(2, -10 * t);
-    // Add tiny overshoot and settle (about 2% overshoot)
-    const overshoot = 0.02;
-    const settle = Math.sin(t * Math.PI) * overshoot * (1 - t);
-    return expo + settle;
+// Cubic-bezier easing (same maths as CSS cubic-bezier()). Returns f(t) for t in [0, 1].
+function makeCubicBezier(x1, y1, x2, y2) {
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const sampleX = u => ((ax * u + bx) * u + cx) * u;
+    const sampleY = u => ((ay * u + by) * u + cy) * u;
+    const slopeX = u => (3 * ax * u + 2 * bx) * u + cx;
+    return function (t) {
+        if (t <= 0) return 0;
+        if (t >= 1) return 1;
+        let u = t;
+        for (let i = 0; i < 8; i++) {
+            const err = sampleX(u) - t;
+            if (Math.abs(err) < 1e-5) break;
+            const d = slopeX(u);
+            if (Math.abs(d) < 1e-6) break;
+            u -= err / d;
+        }
+        return sampleY(Math.max(0, Math.min(1, u)));
+    };
+}
+
+// Camera + image flight when entering / leaving a project: soft start, long soft landing,
+// no overshoot. Camera and images share the curve so they read as one movement.
+const easeSelectionMove = makeCubicBezier(0.35, 0, 0.15, 1);
+
+// ── Frame timing ─────────────────────────────────────────────────────────────
+// Per-frame smoothing constants in this file were tuned at 60 fps. frameScale is the
+// length of the current frame in 60 fps frames, so damp()/decayPerFrame() give the same
+// real-time speed on 120 Hz displays and stay steady when a frame runs long.
+let frameScale = 1;
+function damp(k) {
+    return frameScale === 1 ? k : 1 - Math.pow(1 - k, frameScale);
+}
+function decayPerFrame(k) {
+    return frameScale === 1 ? k : Math.pow(k, frameScale);
 }
 
 // Logarithmic easing function - starts fast, slows down gradually
@@ -330,11 +639,6 @@ function easeOutLog(t) {
     return Math.log(1 + t * (e - 1)) / Math.log(e);
 }
 
-// Softer easing for phase 2 pan (10% smoother than expo)
-function easeOutCubic(t) {
-    if (t >= 1) return 1;
-    return 1 - Math.pow(1 - t, 3);
-}
 
 
 // Viewport helper (handles iOS visual viewport sizing)
@@ -546,8 +850,8 @@ function drawMobileAutoLines(ctx, now) {
     if (!mobileAutoEnabled || mobileAutoLines.length === 0) return;
 
     ctx.save();
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    const centerX = viewW / 2;
+    const centerY = viewH / 2;
     ctx.translate(centerX + cameraPanX, centerY + cameraPanY);
     ctx.scale(globalZoomLevel, globalZoomLevel);
     ctx.translate(-centerX, -centerY);
@@ -662,53 +966,37 @@ function scheduleAlignedDesktopRelayoutIfNeeded(changedImagePath = null) {
     });
 }
 
-function layoutAlignedEmojisDesktop(animate = true) {
+// Lay the current project's images out as one horizontal row (desktop).
+//   animate    — fly images to their places (false = place instantly)
+//   snapCamera — also put the camera straight on the row (used after a window resize)
+function layoutAlignedEmojisDesktop(animate = true, snapCamera = false) {
     if (alignedEmojiIndex === null) return;
     if (isMobileDevice()) return;
     if (!alignedEmojis || alignedEmojis.length === 0) return;
 
-    loadFullResForPaths(alignedEmojis.map(p => p.imagePath));
-    loadHighresForPaths(alignedEmojis.map(p => p.imagePath));
     const now = performance.now();
     // Desktop selection:
-    // - Images have equal WIDTH (scale proportionally)
-    // - Selection occupies the LEFT 2/3 of the screen
-    // - Images scaled so row height = 2/3 of vertical screen space
+    // - All images share one HEIGHT (2/3 of the viewport); widths follow their proportions
+    // - The focused image sits in the LEFT 2/3 of the screen; text goes below / right
     const horizontalGap = 35;
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    const centerX = viewW / 2;
+    const centerY = viewH / 2;
 
     const regionLeft = 40;
-    const regionRight = (canvas.width * 2) / 3 - 40;
+    const regionRight = (viewW * 2) / 3 - 40;
     const regionWidth = Math.max(1, regionRight - regionLeft);
-    const SELECTION_ROW_HEIGHT_FRACTION = 2 / 3;
-    const targetRowHeightScreen = canvas.height * SELECTION_ROW_HEIGHT_FRACTION;
+    const targetHeightWorld = viewH * SELECTION_ROW_HEIGHT_FRACTION; // row height at zoom 1
 
-    // Row image height = 2/3 viewport; zoom/pan fits the strip (wide panoramas no longer shrink height)
-    const targetHeightScreen = targetRowHeightScreen;
-    const targetHeightWorld = targetHeightScreen; // zoom=1 baseline; we pan/zoom to fit
-
-    const imageHeights = [];
-    const imageWidths = [];
-
-    // Compute dimensions (kick off loads for any missing images)
-    alignedEmojis.forEach(point => {
+    const imageWidths = alignedEmojis.map(point => {
         const imageData = imageCache[point.imagePath];
-        const aspectRatio = (imageData && imageData.aspectRatio) ? imageData.aspectRatio : 1;
-
-        // If missing, request full-res load so we can relayout when it arrives
+        const aspectRatio = (imageData && imageData.aspectRatio > 0) ? imageData.aspectRatio : 1;
+        // Not even a thumbnail yet: ask for the image so the row can settle once it arrives
         if (!imageData) {
-            loadImageWithRetry(point.imagePath, 2, false).then(() => {
+            loadImageWithRetry(point.imagePath, 2, true).then(() => {
                 scheduleAlignedDesktopRelayoutIfNeeded(point.imagePath);
             }).catch(() => {});
         }
-
-        const safeAR = aspectRatio > 0 ? aspectRatio : 1;
-        const imageHeight = targetHeightWorld; // equal height for all selected images
-        const imageWidth = imageHeight * safeAR; // proportional width
-
-        imageHeights.push(imageHeight);
-        imageWidths.push(imageWidth);
+        return targetHeightWorld * aspectRatio;
     });
 
     const totalWidth = imageWidths.reduce((sum, width) => sum + width, 0) + (alignedEmojis.length - 1) * horizontalGap;
@@ -720,37 +1008,61 @@ function layoutAlignedEmojisDesktop(animate = true) {
     let startX = firstImageLeftEdge;
     const worldLeftEdge = firstImageLeftEdge;
 
-    // Check if this is a NEW alignment or a relayout (relayout after images load must not restart animation)
-    const isNewAlignment = selectionAnimationPhase === 0 && !selectionAnimationHasRunForCurrentAlignment;
+    // A NEW alignment gets the entry animation; anything later (an image's real proportions
+    // arriving) is a relayout and must not restart it or move the camera.
+    const isNewAlignment = !selectionAnimationHasRunForCurrentAlignment && !snapCamera;
+
+    // Parallax offset the grid is currently drawn with — flights start from where the
+    // images really are on screen, not from their un-shifted base position.
+    const parallaxX = (smoothMouseX - centerX) * parallaxStrength;
+    const parallaxY = (smoothMouseY - centerY) * parallaxStrength;
 
     alignedEmojis.forEach((point, index) => {
         const imageWidth = imageWidths[index];
-        const imageHeight = imageHeights[index];
+        const prevTargetX = point.targetX;
+        const prevTargetSize = point.targetSize;
+        const wasAligned = point.isAligned === true;
+        const inFlight = point.alignmentStartTime > 0;
 
         point.isAligned = true;
         point.targetX = startX + imageWidth / 2;
         point.targetY = centerY;
-        point.targetSize = imageHeight;
-        point.targetImageWidth = imageWidth; // used as width in draw; height is the targetSize
+        point.targetSize = targetHeightWorld;
+        point.targetImageWidth = imageWidth; // row images: size = height, width follows proportions
         point.targetOpacity = 1.0;
 
         if (animate && isNewAlignment) {
-            // NEW alignment - start from original grid position
-            point.startX = point.originalBaseX || 0;
-            point.startY = point.originalBaseY || 0;
-            const originalSize = point.layer === 'layer_1' ? baseEmojiSize : baseEmojiSize * layer2SizeMultiplier;
-            point.startSize = originalSize;
-            point.currentAlignedX = point.originalBaseX || 0;
-            point.currentAlignedY = point.originalBaseY || 0;
-            point.currentSize = originalSize;
-            // Animation will be controlled by selection animation phase
+            // NEW alignment — start exactly where (and as large as) the image is drawn right now.
+            const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
+            const restSize = point.layer === 'layer_1' ? baseEmojiSize : baseEmojiSize * layer2SizeMultiplier;
+            const imageData = imageCache[point.imagePath];
+            const aspectRatio = (imageData && imageData.aspectRatio > 0) ? imageData.aspectRatio : 1;
+            // Grid size is the image's LONGER side; row size is its height.
+            const gridLongSide = (inFlight ? point.currentSize : restSize) * (inFlight ? 1 : (point.hoverSize || 1));
+            point.startX = inFlight ? point.currentAlignedX : (point.originalBaseX || 0) + parallaxX * speed;
+            point.startY = inFlight ? point.currentAlignedY : (point.originalBaseY || 0) + parallaxY * speed;
+            point.startSize = aspectRatio > 1 ? gridLongSide / aspectRatio : gridLongSide;
+            point.currentAlignedX = point.startX;
+            point.currentAlignedY = point.startY;
+            point.currentSize = point.startSize;
             point.alignmentStartTime = now;
-        } else if (animate && !isNewAlignment) {
-            // RELAYOUT - start from current position for smooth transition
-            point.startX = point.currentAlignedX;
-            point.startY = point.currentAlignedY;
-            point.startSize = point.currentSize;
-            point.alignmentStartTime = now;
+            point.flightDuration = SELECTION_ENTER_DURATION;
+            point.isHovered = false;
+            point.hoverSize = 1.0;
+            point.hoverStartTime = 0;
+        } else if (animate) {
+            // RELAYOUT — an image still in flight simply heads for its new place; one at rest
+            // eases over only if its place actually changed.
+            const moved = !wasAligned
+                || Math.abs((prevTargetX || 0) - point.targetX) > 0.5
+                || Math.abs((prevTargetSize || 0) - point.targetSize) > 0.5;
+            if (moved && !inFlight) {
+                point.startX = point.currentAlignedX;
+                point.startY = point.currentAlignedY;
+                point.startSize = point.currentSize;
+                point.alignmentStartTime = now;
+                point.flightDuration = SELECTION_RELAYOUT_DURATION;
+            }
         } else {
             point.currentAlignedX = point.targetX;
             point.currentAlignedY = point.targetY;
@@ -764,13 +1076,8 @@ function layoutAlignedEmojisDesktop(animate = true) {
         startX += imageWidth + horizontalGap;
     });
 
-    // Calculate zoom levels
-    // Zoom OUT: level that fits the ENTIRE grid centered in screen
-    const screenPadding = 60;
-    const availableWidth = canvas.width - screenPadding * 2;
-    const zoomOutLevel = Math.min(availableWidth / totalWidthWithSideGaps, 1.0);
-    
-    // Zoom IN: final zoom level (fits row + side gaps in LEFT 2/3 region)
+    // Final zoom: largest discrete level (up to the default) at which the row + side gaps
+    // fits the LEFT 2/3 region; long rows simply scroll at the lowest level.
     const requiredZoom = regionWidth / totalWidthWithSideGaps;
     let bestIndex = 0;
     const maxAllowedIndex = initialZoomIndex;
@@ -781,17 +1088,19 @@ function layoutAlignedEmojisDesktop(animate = true) {
         }
     }
     const finalZoom = zoomLevels[bestIndex];
-    
-    // Pan for zoom out (centered)
-    const zoomOutPanX = 0;
-    
-    // Pan for zoom in: focus on clicked image (from grid) or center-closest (from menu)
+
+    // Camera target: the clicked image (from grid) or the image closest to centre (from menu)
     let focusIndex;
-    if (isNewAlignment) {
-        if (selectionFocusPointForPhase2 && alignedEmojis.some(p => p === selectionFocusPointForPhase2 || (p.imagePath === selectionFocusPointForPhase2.imagePath && p.emojiIndex === selectionFocusPointForPhase2.emojiIndex))) {
-            focusIndex = alignedEmojis.findIndex(p => p === selectionFocusPointForPhase2 || (p.imagePath === selectionFocusPointForPhase2.imagePath && p.emojiIndex === selectionFocusPointForPhase2.emojiIndex));
+    if (isNewAlignment || snapCamera) {
+        const focusPoint = selectionFocusPointForPhase2;
+        const clickedIndex = focusPoint
+            ? alignedEmojis.findIndex(p => p === focusPoint || (p.imagePath === focusPoint.imagePath && p.emojiIndex === focusPoint.emojiIndex))
+            : -1;
+        if (clickedIndex >= 0) {
+            focusIndex = clickedIndex;
+        } else if (snapCamera && selectionFocusIndexStored != null && selectionFocusIndexStored < alignedEmojis.length) {
+            focusIndex = selectionFocusIndexStored;
         } else {
-            // From menu: pick image whose center is closest to screen center
             focusIndex = 0;
             let minDist = Infinity;
             alignedEmojis.forEach((p, idx) => {
@@ -809,29 +1118,30 @@ function layoutAlignedEmojisDesktop(animate = true) {
     const screenXAtPan0 = (focusTargetX - centerX) * finalZoom + centerX;
     const finalPanX = regionCenter - screenXAtPan0;
 
+    currentZoomIndex = bestIndex;
+
     if (isNewAlignment && animate) {
-        // Start phased selection animation (reset fixed X so we capture it when phase 0)
+        // Start the entry move (reset fixed text X so it is captured again once it settles)
         selectionAboutFixedLeftPx = null;
         selectionMoreFixedLeftPx = null;
         selectionAnimationHasRunForCurrentAlignment = true;
         selectionAnimationPhase = 1;
         selectionPhaseStartTime = now;
-        selectionBasePanX = finalPanX; // For infinite carousel wrap
-        
-        // Store starting values
+        selectionBasePanX = finalPanX; // reference for the infinite-carousel wrap
+
         selectionStartZoom = globalZoomLevel;
         selectionStartPanX = cameraPanX;
         selectionStartPanY = cameraPanY;
-        
-        // Store target values
-        selectionTargetZoomOut = zoomOutLevel;
         selectionTargetZoomIn = finalZoom;
-        selectionZoomOutPanX = zoomOutPanX;
         selectionFinalPanX = finalPanX;
-        
-        currentZoomIndex = bestIndex;
-        
-        // Fade out non-selected images (will animate during phase 1)
+
+        // The phase drives the camera from here; drop any leftover zoom / pan momentum
+        isZoomTransitioning = false;
+        zoomVelocity = 0;
+        panVelocityX = 0;
+        panVelocityY = 0;
+
+        // Fade out non-selected images
         points.forEach(p => {
             const isSelected = alignedEmojis.some(a => a.imagePath === p.imagePath || a.emojiIndex === p.emojiIndex);
             if (!isSelected) {
@@ -839,14 +1149,31 @@ function layoutAlignedEmojisDesktop(animate = true) {
                 p.isInactive = true;
             }
         });
-    } else {
-        // Relayout - adjust zoom and pan directly
-    currentZoomIndex = bestIndex;
-    startZoomTransition();
-        targetCameraPanX = finalPanX;
-        cameraPanX = finalPanX;
+
+        queueRowImages(focusIndex);
+    } else if (snapCamera) {
+        selectionAboutFixedLeftPx = null;
+        selectionMoreFixedLeftPx = null;
+        selectionAnimationHasRunForCurrentAlignment = true;
+        selectionAnimationPhase = 0;
         selectionBasePanX = finalPanX;
-    targetCameraPanY = 0;
+        isZoomTransitioning = false;
+        zoomVelocity = 0;
+        globalZoomLevel = finalZoom;
+        targetZoomLevel = finalZoom;
+        cameraPanX = finalPanX;
+        targetCameraPanX = finalPanX;
+        cameraPanY = 0;
+        targetCameraPanY = 0;
+        queueRowImages(focusIndex);
+    } else {
+        // Relayout: leave the camera with the viewer. If the entry move is still running,
+        // let it land on the updated spot.
+        selectionBasePanX = finalPanX;
+        if (selectionAnimationPhase === 1) {
+            selectionTargetZoomIn = finalZoom;
+            selectionFinalPanX = finalPanX;
+        }
     }
 }
 
@@ -883,19 +1210,18 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
     if (!alignedEmojis || alignedEmojis.length === 0) return;
 
     loadFullResForPaths(alignedEmojis.map(p => p.imagePath));
-    loadHighresForPaths(alignedEmojis.map(p => p.imagePath));
     const selectedZoom = zoomLevels[initialZoomIndex]; // 1.0
     // Equal left and right margin (e.g. 14px or 4% each side), images use remaining width
-    const marginScreen = Math.max(14, canvas.width * 0.04);
+    const marginScreen = Math.max(14, viewW * 0.04);
     const paddingScreen = marginScreen;
-    const targetWidthScreen = canvas.width - 2 * marginScreen;
-    const maxImageHeightScreen = canvas.height * (2 / 3);
+    const targetWidthScreen = viewW - 2 * marginScreen;
+    const maxImageHeightScreen = viewH * (2 / 3);
     const gapScreen = MOBILE_SELECTION_VERTICAL_GAP;
     const topPaddingScreen = marginScreen;
 
     const gapWorld = gapScreen / selectedZoom;
     const topPaddingWorld = topPaddingScreen / selectedZoom;
-    const centerX = canvas.width / 2;
+    const centerX = viewW / 2;
 
     const widths = [];
     const heights = [];
@@ -1021,7 +1347,7 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
 
     mobileAlignedContentHeightWorld = yTop + topPaddingWorld;
     const firstCenterYWorld = alignedEmojis[0].targetY;
-    const worldOffsetY = (firstCenterYWorld - (canvas.height / 2)) * selectedZoom;
+    const worldOffsetY = (firstCenterYWorld - (viewH / 2)) * selectedZoom;
     mobileAlignedBasePanY = -worldOffsetY;
     mobileAlignedBasePanX = 0;
 
@@ -1038,7 +1364,7 @@ function layoutAlignedEmojisMobileVertical(animate = true) {
     cameraPanX = 0;
     cameraPanY = mobileAlignedBasePanY;
 
-    scrollIndicatorVisible = (mobileAlignedContentHeightWorld * selectedZoom) > canvas.height;
+    scrollIndicatorVisible = (mobileAlignedContentHeightWorld * selectedZoom) > viewH;
     if (scrollIndicatorVisible) {
         scrollIndicatorFadeTime = performance.now() + 3000;
     }
@@ -1462,7 +1788,7 @@ function initLoadingText() {
         return;
     }
     
-    const text = "Welcome to Spatial Playground";
+    const text = t('Welcome to Spatial Playground');
     // Split by space - ВАЖНО: не фильтруем, просто разбиваем
     const words = text.split(' ');
     // Убираем пустые строки ТОЛЬКО после split
@@ -1785,15 +2111,15 @@ function gifOverlayHideUnused() {
 }
 
 function worldBoxToClientRect(centerWorldX, centerWorldY, drawW, drawH) {
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    const centerX = viewW / 2;
+    const centerY = viewH / 2;
     const sx = (centerWorldX - centerX) * globalZoomLevel + centerX + cameraPanX;
     const sy = (centerWorldY - centerY) * globalZoomLevel + centerY + cameraPanY;
     const cw = drawW * globalZoomLevel;
     const ch = drawH * globalZoomLevel;
     const r = canvas.getBoundingClientRect();
-    const scaleX = r.width / Math.max(1, canvas.width);
-    const scaleY = r.height / Math.max(1, canvas.height);
+    const scaleX = r.width / Math.max(1, viewW);
+    const scaleY = r.height / Math.max(1, viewH);
     return {
         left: r.left + (sx - cw / 2) * scaleX,
         top: r.top + (sy - ch / 2) * scaleY,
@@ -1885,59 +2211,204 @@ function loadFullResForPaths(paths) {
     });
 }
 
-// Path to highres version: "final images/folder/file.jpg" -> "final images/folder/highres/file.jpg"
-function getHighresPath(path) {
-    if (!path || path.indexOf('/') < 0) return null;
-    const lastSlash = path.lastIndexOf('/');
-    const folder = path.substring(0, lastSlash);
-    const filename = path.substring(lastSlash + 1);
-    return folder + '/highres/' + filename;
+// ── Project-row images (desktop) ─────────────────────────────────────────────
+// The original files are served untouched. Each one is fetched once, then decoded OFF the
+// main thread into a bitmap sized for what the row can actually show: row height × zoom ×
+// device pixel ratio, never larger than the original. Compared with pushing every
+// 12-megapixel original through the canvas this:
+//   • keeps the fly-in smooth (no main-thread decode stalls, small GPU uploads),
+//   • removes the shimmer of heavy per-frame downscaling (one high-quality resample),
+//   • uses a fraction of the memory — and zooming in swaps in a larger decode of the
+//     same file, up to full original resolution, so nothing is lost on close inspection.
+const ROW_LOAD_CONCURRENCY = 3;
+const rowBlobs = new Map();     // imagePath -> Blob of the original file (while its project is open)
+const rowLoadState = new Map(); // imagePath -> pixel height requested / loaded
+const rowQueue = [];
+const _rowGifPaths = new Set(); // GIFs of open projects (loaded as real <img> elements)
+let rowActiveLoads = 0;
+let rowReleaseTimer = 0;
+let lastRowUpgradeCheck = 0;
+
+let _alignedPathSetSource = null;
+let _alignedPathSet = new Set();
+// Set of image paths in the open project (rebuilt only when the project changes)
+function getAlignedPathSet() {
+    if (_alignedPathSetSource !== alignedEmojis) {
+        _alignedPathSetSource = alignedEmojis;
+        _alignedPathSet = new Set((alignedEmojis || []).map(p => p.imagePath));
+    }
+    return _alignedPathSet;
 }
 
-// Load highres from folder/highres/ and upgrade cache when ready (smooth, non-blocking)
-function loadHighresOnce(originalPath) {
-    const highresPath = getHighresPath(originalPath);
-    if (!highresPath) return Promise.resolve();
-    const url = getImageUrl(highresPath, false);
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = async () => {
-            try {
-                var isGifHigh = shouldKeepHtmlImageForCanvas(highresPath) || shouldKeepHtmlImageForCanvas(originalPath);
-                if (typeof img.decode === 'function' && !isGifHigh) {
-                    try { await img.decode(); } catch (_) {}
-                }
-                let drawable = img;
-                const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window));
-                if (!isMobile && typeof createImageBitmap === 'function' && !shouldKeepHtmlImageForCanvas(highresPath)) {
-                    try {
-                        drawable = await createImageBitmap(img, { imageOrientation: 'from-image' });
-                    } catch (_) {}
-                }
-                const entry = imageCache[originalPath];
-                if (entry) {
-                    entry.img = drawable;
-                    entry.width = drawable.width || img.naturalWidth;
-                    entry.height = drawable.height || img.naturalHeight;
-                    entry.aspectRatio = (entry.width && entry.height) ? entry.width / entry.height : entry.aspectRatio;
-                    scheduleAlignedDesktopRelayoutIfNeeded(originalPath);
-                    scheduleAlignedMobileRelayoutIfNeeded(originalPath);
-                }
-            } catch (_) {}
-            resolve();
+// Bitmap height (device pixels) the row needs at a given zoom
+function rowTargetHeightPx(zoom) {
+    return Math.ceil(viewH * SELECTION_ROW_HEIGHT_FRACTION * Math.max(1, zoom) * canvasDpr);
+}
+
+// Natural, orientation-corrected size of an encoded image — header only, no pixel decode
+function probeBlobSize(blob) {
+    return new Promise(resolve => {
+        const url = URL.createObjectURL(blob);
+        const probe = new Image();
+        probe.onload = () => {
+            const size = { width: probe.naturalWidth, height: probe.naturalHeight };
+            URL.revokeObjectURL(url);
+            resolve(size.width > 0 && size.height > 0 ? size : null);
         };
-        img.onerror = () => resolve();
-        img.src = url;
+        probe.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+        probe.src = url;
     });
 }
 
-// Load highres for selection mode after full-res is shown (staggered, non-blocking)
-function loadHighresForPaths(paths) {
-    if (!paths || paths.length === 0) return;
-    const HIGHRES_STAGGER_MS = 80;
-    paths.forEach((p, index) => {
-        setTimeout(() => loadHighresOnce(p), index * HIGHRES_STAGGER_MS);
+async function loadRowBitmap(path, neededHeightPx) {
+    if (!getAlignedPathSet().has(path)) { rowLoadState.delete(path); return; } // project closed meanwhile
+
+    let blob = rowBlobs.get(path);
+    if (!blob) {
+        const response = await fetch(getImageUrl(path, false));
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        blob = await response.blob();
+    }
+    const natural = await probeBlobSize(blob);
+
+    let bitmap = null;
+    let isFullResolution = true;
+    if (natural && natural.height > neededHeightPx * 1.1) {
+        try {
+            bitmap = await createImageBitmap(blob, {
+                resizeWidth: Math.max(1, Math.round(neededHeightPx * natural.width / natural.height)),
+                resizeHeight: neededHeightPx,
+                resizeQuality: 'high',
+            });
+            isFullResolution = false;
+        } catch (_) {
+            bitmap = null; // resize options unsupported — fall through to a plain decode
+        }
+    }
+    if (!bitmap) {
+        bitmap = await createImageBitmap(blob);
+        isFullResolution = true;
+    }
+
+    if (!getAlignedPathSet().has(path)) { // project closed while decoding
+        if (bitmap.close) bitmap.close();
+        rowLoadState.delete(path);
+        return;
+    }
+    rowBlobs.set(path, blob);
+
+    if (!imageCache[path]) {
+        imageCache[path] = { thumb: null, img: null, width: 0, height: 0, aspectRatio: 1, error: false };
+    }
+    const entry = imageCache[path];
+    const previous = entry.img;
+    const previousAspect = entry.aspectRatio;
+    const hadImage = !!(entry.img || entry.thumb);
+    entry.img = bitmap;
+    entry.imgHeight = bitmap.height;
+    entry.imgIsFullResolution = isFullResolution || bitmap.height >= (natural ? natural.height : 0);
+    entry.width = natural ? natural.width : bitmap.width;
+    entry.height = natural ? natural.height : bitmap.height;
+    entry.aspectRatio = entry.width / entry.height;
+    entry.error = false;
+    if (previous && previous !== bitmap && previous !== entry.thumb && typeof previous.close === 'function') previous.close();
+
+    // The thumbnail already gave the row its proportions; only re-space the row if the
+    // original really differs (e.g. a thumbnail that was missing or differently cropped).
+    if (!hadImage || Math.abs(entry.aspectRatio - previousAspect) / entry.aspectRatio > 0.005) {
+        scheduleAlignedDesktopRelayoutIfNeeded(path);
+    }
+}
+
+function pumpRowQueue() {
+    while (rowActiveLoads < ROW_LOAD_CONCURRENCY && rowQueue.length) {
+        const job = rowQueue.shift();
+        rowActiveLoads++;
+        loadRowBitmap(job.path, job.height)
+            .catch(() => {
+                // Anything unexpected: fall back to the plain full-resolution loader
+                rowLoadState.delete(job.path);
+                return loadImageWithRetry(job.path, 1, false);
+            })
+            .finally(() => { rowActiveLoads--; pumpRowQueue(); });
+    }
+}
+
+// Ask for a row image at (at least) the given pixel height
+function requestRowBitmap(path, neededHeightPx) {
+    if (shouldKeepHtmlImageForCanvas(path) || typeof createImageBitmap !== 'function' || typeof fetch !== 'function') {
+        const cached = imageCache[path];
+        _rowGifPaths.add(path);
+        if (!cached || !cached.img) loadImageWithRetry(path, 2, false); // GIFs stay real <img> elements
+        return;
+    }
+    const entry = imageCache[path];
+    if (entry && entry.img && (entry.imgIsFullResolution || (entry.imgHeight || 0) >= neededHeightPx - 2)) return;
+    if ((rowLoadState.get(path) || 0) >= neededHeightPx) return; // already queued / loaded at this size
+    rowLoadState.set(path, neededHeightPx);
+    rowQueue.push({ path, height: neededHeightPx });
+    pumpRowQueue();
+}
+
+// Queue the open project's images, nearest to the focused one first
+function queueRowImages(focusIndex) {
+    if (isMobileDevice() || !alignedEmojis || !alignedEmojis.length) return;
+    if (rowReleaseTimer) { clearTimeout(rowReleaseTimer); rowReleaseTimer = 0; releaseRowImages(); }
+    const count = alignedEmojis.length;
+    const height = rowTargetHeightPx(1);
+    alignedEmojis
+        .map((point, index) => {
+            const d = Math.abs(index - (focusIndex || 0));
+            return { path: point.imagePath, distance: Math.min(d, count - d) };
+        })
+        .sort((a, b) => a.distance - b.distance)
+        .forEach(item => requestRowBitmap(item.path, height));
+}
+
+// While zoomed in on the row, give the images on screen a decode that matches the zoom
+function maybeUpgradeRowBitmaps(now) {
+    if (now - lastRowUpgradeCheck < 300) return;
+    lastRowUpgradeCheck = now;
+    if (selectionAnimationPhase !== 0 || targetZoomLevel <= 1.02) return;
+    const height = rowTargetHeightPx(maxZoom);
+    const centerX = viewW / 2;
+    const rowWidth = alignedRowTotalWidthWorld;
+    alignedEmojis.forEach(point => {
+        const halfWidth = ((point.targetImageWidth || point.targetSize || 0) / 2) * globalZoomLevel;
+        for (let k = -1; k <= 1; k++) {
+            const screenX = (point.currentAlignedX + k * rowWidth - centerX) * globalZoomLevel + centerX + cameraPanX;
+            if (screenX + halfWidth > -viewW * 0.25 && screenX - halfWidth < viewW * 1.25) {
+                requestRowBitmap(point.imagePath, height);
+                break;
+            }
+        }
     });
+}
+
+// Free the big decodes of projects that are no longer open (the grid keeps its thumbnails)
+function releaseRowImages() {
+    const keep = getAlignedPathSet();
+    const open = alignedEmojiIndex !== null;
+    const paths = new Set([...rowBlobs.keys(), ...rowLoadState.keys(), ..._rowGifPaths]);
+    paths.forEach(path => {
+        if (open && keep.has(path)) return;
+        rowBlobs.delete(path);
+        rowLoadState.delete(path);
+        _rowGifPaths.delete(path);
+        const entry = imageCache[path];
+        if (!entry || !entry.img || !entry.thumb || entry.img === entry.thumb) return;
+        const big = entry.img;
+        entry.img = null;
+        entry.imgHeight = 0;
+        entry.imgIsFullResolution = false;
+        imageLoadPromises.delete(path + ':full'); // allow a fresh load next time it is opened
+        if (typeof big.close === 'function') big.close();
+    });
+}
+function scheduleRowRelease() {
+    if (rowReleaseTimer) clearTimeout(rowReleaseTimer);
+    // After the images have flown back to grid size
+    rowReleaseTimer = setTimeout(() => { rowReleaseTimer = 0; releaseRowImages(); }, SELECTION_EXIT_DURATION + 600);
 }
 
 function getImageUrl(path, useThumb) {
@@ -2001,26 +2472,36 @@ function loadImageOnce(path, useThumb, skipProgress) {
                     imageCache[path] = { thumb: null, img: null, width: 0, height: 0, aspectRatio: 1, error: false };
                 }
                 const entry = imageCache[path];
+                const hadImage = !!(entry.thumb || entry.img);
+                const previousAspect = entry.aspectRatio;
                 if (useThumb) {
                     entry.thumb = drawable;
-                    entry.width = width;
-                    entry.height = height;
-                    entry.aspectRatio = width / height;
+                    // A thumbnail arriving after the full image must not downgrade its metrics
+                    if (!entry.img) {
+                        entry.width = width;
+                        entry.height = height;
+                        entry.aspectRatio = width / height;
+                    }
                 } else {
                     entry.img = drawable;
+                    entry.imgHeight = height;
+                    entry.imgIsFullResolution = true;
                     entry.width = width;
                     entry.height = height;
                     entry.aspectRatio = width / height;
                 }
                 entry.error = false;
+                const proportionsChanged = !hadImage || Math.abs(entry.aspectRatio - previousAspect) / entry.aspectRatio > 0.005;
 
                 if (!skipProgress) {
                     if (!countedImagePaths.has(path)) { countedImagePaths.add(path); imagesLoaded++; }
                     updateLoadingProgressBar();
                     debugLog('Loaded ' + (useThumb ? 'thumb' : 'full') + ' ' + path);
                 }
-            scheduleAlignedDesktopRelayoutIfNeeded(path);
-            scheduleAlignedMobileRelayoutIfNeeded(path);
+                if (proportionsChanged) {
+                    scheduleAlignedDesktopRelayoutIfNeeded(path);
+                    scheduleAlignedMobileRelayoutIfNeeded(path);
+                }
                 resolve(entry);
             } catch (err) {
                 console.warn('Image onload error:', path, err);
@@ -2074,19 +2555,19 @@ if (document.readyState === 'loading') {
 // For mobile: make grid wider than screen for exploration
 function getBoundingBox() {
     const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-    const screenHeight = canvas.height;
+    const screenHeight = viewH;
     const margin = screenHeight / 5;
 
-    let width = canvas.width;
+    let width = viewW;
     // On mobile, make grid wider to allow navigation; landscape (tablet): 1.5x so grid is 2x narrower
     if (isMobile) {
-        const isLandscape = canvas.width > canvas.height;
-        width = isLandscape ? canvas.width * 1.5 : canvas.width * 3;
+        const isLandscape = viewW > viewH;
+        width = isLandscape ? viewW * 1.5 : viewW * 3;
     }
 
     // Center the random grid around the viewport so its midpoint aligns with the mobile
     // nav intersection ("we are" sits at viewport center). Desktop stays origin-based.
-    const offsetX = isMobile ? (canvas.width - width) / 2 : 0;
+    const offsetX = isMobile ? (viewW - width) / 2 : 0;
     
     return {
         x: offsetX,
@@ -2197,22 +2678,7 @@ const GRID_POINT_COUNT = imagePaths.length;
 const points = generatePoints(GRID_POINT_COUNT, 50);
 
 // Initialize current sizes and opacity for all points
-points.forEach(point => {
-    if (point.layer === 'layer_1') {
-        point.targetSize = baseEmojiSize;
-        point.currentSize = baseEmojiSize;
-        point.startSize = baseEmojiSize;
-    } else {
-        point.targetSize = baseEmojiSize * layer2SizeMultiplier;
-        point.currentSize = baseEmojiSize * layer2SizeMultiplier;
-        point.startSize = baseEmojiSize * layer2SizeMultiplier;
-    }
-    point.opacity = 1.0;
-    point.targetOpacity = 1.0;
-    point.hoverSize = 1.0;
-    point.isHovered = false;
-    point.hoverStartTime = 0;
-});
+initGridPointDefaults(points);
 
 // Check if mouse is hovering over a point
 function isPointHovered(pointX, pointY, mouseX, mouseY, size) {
@@ -2451,8 +2917,8 @@ function handleTouchMove(e) {
                 if (pinchStartDistance > 0) {
                     var ratio = curDist / pinchStartDistance;
                     var newZoom = pinchStartZoom * ratio;
-                    var cX = canvas.width / 2;
-                    var cY = canvas.height / 2;
+                    var cX = viewW / 2;
+                    var cY = viewH / 2;
                     var curZ = targetZoomLevel ?? globalZoomLevel ?? 1.0;
                     var curPanX = cameraPanX;
                     var curPanY = cameraPanY;
@@ -2481,7 +2947,7 @@ function handleTouchMove(e) {
             
             if (isMobileScrolling) {
                 const deltaY = touchY - touchStartY;
-                const screenHeight = canvas.height;
+                const screenHeight = viewH;
                 // Convert touch delta to scroll position (0 to 1) - more sensitive
                 const scrollDelta = -deltaY / (screenHeight * 1.5); // More sensitive scrolling
                 const nextPos = Math.max(0, Math.min(1, touchStartScrollPosition + scrollDelta));
@@ -2553,8 +3019,8 @@ function handleMouseLeave() {
     mouseOverCanvas = false;
     
     if (!isDragging) {
-    targetMouseX = canvas.width / 2;
-    targetMouseY = canvas.height / 2;
+    targetMouseX = viewW / 2;
+    targetMouseY = viewH / 2;
     }
     
     // Clear hover state when mouse leaves canvas
@@ -2677,7 +3143,9 @@ function handleMouseDown(e) {
         // Check if clicking on an already hovered image (connection mode - old behavior, keep for compatibility)
         const currentTime = performance.now();
         const clickHoverTimeout = (typeof isMobileDevice === 'function' && isMobileDevice()) ? HOVER_FADE_TIMEOUT : HOVER_FADE_TIMEOUT_WEB;
-        if (hoveredPoint === clickedPoint && hoverStartTime > 0 && (currentTime - hoverStartTime) >= clickHoverTimeout && hoveredLinesOpacity < 0.5) {
+        // Skipped once the project is already click-highlighted: the next click opens it (see below)
+        const alreadyHighlighted = isConnectionMode && isConnectionModeClicked && connectedPoints && connectedPoints.includes(clickedPoint);
+        if (!alreadyHighlighted && hoveredPoint === clickedPoint && hoverStartTime > 0 && (currentTime - hoverStartTime) >= clickHoverTimeout && hoveredLinesOpacity < 0.5) {
             // Enter connection mode - draw dotted lines connecting images from same folder
             enterConnectionMode(clickedPoint, true); // true = clicked
             e.preventDefault();
@@ -2732,13 +3200,9 @@ function _preloadBandcampUrls() {
             if (folder) bcFolders.add(folder);
         }
     });
-    const origin = (window.location && window.location.origin) || '';
-    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
     if (!window.__BC_URLS__) window.__BC_URLS__ = {};
     bcFolders.forEach(folder => {
-        const encodedPath = folder.split('/').map(s => encodeURIComponent(s)).join('/');
-        const url = origin + pathPrefix + '/img/' + encodedPath + '/bandcamp.txt';
-        fetch(url).then(r => r.ok ? r.text() : null).catch(() => null).then(text => {
+        fetchProjectFile(folder, 'bandcamp.txt').then(text => {
             if (text && text.trim()) window.__BC_URLS__[folder] = text.trim();
         });
     });
@@ -2787,8 +3251,8 @@ function handleWheel(e) {
     
     // If in selection or connection (dotted line) mode, use smooth gradual zoom/pan at any zoom level
     if (alignedEmojiIndex !== null || isConnectionMode) {
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
+        const centerX = viewW / 2;
+        const centerY = viewH / 2;
 
         // Selection mode: horizontal wheel/scroll = carousel pan (left-right)
         if (alignedEmojiIndex !== null && !isMobileDevice() && Math.abs(e.deltaX) > 0) {
@@ -2952,31 +3416,60 @@ const layer2Speed = 0.5; // Speed for layer_2 (slower for depth effect)
 
 // Grid rendering cache (pattern-based, much cheaper than per-line loops)
 const gridSize = 25;
-// gridPatternDesktop and gridPatternMobile declared near top of file (before resizeCanvas)
-let gridPatternDesktop = null;
-let gridPatternMobile = null;
 function getGridPattern() {
     if (!ctx) return null;
     const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window));
     if (isMobile && gridPatternMobile) return gridPatternMobile;
     if (!isMobile && gridPatternDesktop) return gridPatternDesktop;
+    // One grid cell, drawn at device resolution so the 1px lines stay crisp on HiDPI screens.
+    const dpr = canvasDpr || 1;
+    const tilePx = Math.round(gridSize * dpr);
     const tile = document.createElement('canvas');
-    tile.width = gridSize;
-    tile.height = gridSize;
+    tile.width = tilePx;
+    tile.height = tilePx;
     const tctx = tile.getContext('2d');
     if (!tctx) return null;
     const gridOpacity = isMobile ? 0.24 * 0.8 * 0.8 : 0.24 * 0.8;
-    tctx.strokeStyle = `rgba(255, 255, 255, ${gridOpacity})`;
-    tctx.lineWidth = 1;
-    tctx.beginPath();
-    tctx.moveTo(0.5, 0);
-    tctx.lineTo(0.5, gridSize);
-    tctx.moveTo(0, 0.5);
-    tctx.lineTo(gridSize, 0.5);
-    tctx.stroke();
+    const linePx = Math.max(1, Math.round(dpr));
+    tctx.fillStyle = `rgba(255, 255, 255, ${gridOpacity})`;
+    tctx.fillRect(0, 0, linePx, tilePx);
+    tctx.fillRect(0, 0, tilePx, linePx);
     const pattern = ctx.createPattern(tile, 'repeat');
+    if (pattern && typeof pattern.setTransform === 'function' && typeof DOMMatrix === 'function') {
+        const k = gridSize / tilePx; // tile pixels -> CSS pixels
+        pattern.setTransform(new DOMMatrix([k, 0, 0, k, 0, 0]));
+    }
     if (isMobile) gridPatternMobile = pattern; else gridPatternDesktop = pattern;
     return pattern;
+}
+
+// Is a world-space position inside a grid image's drawn rectangle?
+function gridPointContains(point, worldX, worldY, parallaxX, parallaxY) {
+    const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
+    const size = point.currentSize * (point.hoverSize || 1); // the image's longer side
+    const data = imageCache[point.imagePath];
+    const aspectRatio = (data && data.aspectRatio > 0) ? data.aspectRatio : 1;
+    const halfW = (aspectRatio >= 1 ? size : size * aspectRatio) / 2;
+    const halfH = (aspectRatio >= 1 ? size / aspectRatio : size) / 2;
+    return Math.abs(worldX - (point.originalBaseX + parallaxX * speed)) <= halfW
+        && Math.abs(worldY - (point.originalBaseY + parallaxY * speed)) <= halfH;
+}
+
+// Topmost grid image under a world-space position — "topmost" in the same fixed order the
+// grid is drawn in, so hover and click always act on the image the viewer actually sees.
+//   forClick: only images that can be interacted with (not faded out / inactive)
+function hitTestGridPoint(worldX, worldY, parallaxX, parallaxY, forClick) {
+    for (let i = points.length - 1; i >= 0; i--) {
+        const point = points[i];
+        if (point.isAligned || point.alignmentStartTime > 0) continue;
+        if (forClick) {
+            if (point.isInactive || point.opacity < 0.15) continue;
+        } else if (point.opacity < 0.01 || point.targetOpacity <= 0) {
+            continue;
+        }
+        if (gridPointContains(point, worldX, worldY, parallaxX, parallaxY)) return point;
+    }
+    return null;
 }
 
 // Find point at mouse position for click detection
@@ -2985,68 +3478,91 @@ function findPointAtMouse(mouseX, mouseY) {
     // Canvas transform order: translate(-centerX, -centerY), scale(zoom), translate(centerX + panX, centerY + panY)
     // World to screen: (wx - cx) * zoom + cx + panX
     // Screen to world: (sx - cx - panX) / zoom + cx
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    const centerX = viewW / 2;
+    const centerY = viewH / 2;
     const effectiveZoom = globalZoomLevel; // Use current zoom level for accurate detection
     
     // Convert screen coordinates to world coordinates by reversing the transform
     const scaledMouseX = ((mouseX - centerX - cameraPanX) / effectiveZoom) + centerX;
     const scaledMouseY = ((mouseY - centerY - cameraPanY) / effectiveZoom) + centerY;
     
-    // Calculate parallax offset for current mouse position
-    const offsetX = (scaledMouseX - centerX) * parallaxStrength;
-    const offsetY = (scaledMouseY - centerY) * parallaxStrength;
-    
-    // Check all points and return the closest one that is hovered
-    // Check in reverse order so points drawn on top are checked first
+    // Open project row first: nearest row image whose hit circle contains the cursor
     let closestPoint = null;
     let closestDistance = Infinity;
-    
     for (let i = points.length - 1; i >= 0; i--) {
         const point = points[i];
-        let x, y;
-        
-        if (point.isAligned) {
-            x = point.currentAlignedX;
-            y = point.currentAlignedY;
-        } else {
-            // Use layer-specific speed for parallax
-            const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
-            x = point.originalBaseX + (offsetX * speed);
-            y = point.originalBaseY + (offsetY * speed);
-        }
-        
-        // Skip inactive points (faded out in selection mode)
-        if (point.isInactive) {
-            continue; // Skip inactive points - they are not available for interaction
-        }
-        // Skip effectively invisible points so pan-on-empty-space works after zoom (no invisible hit targets)
-        if (point.opacity < 0.15) {
-            continue;
-        }
-        
-        // Use appropriate size based on layer and alignment
-        let size;
-        if (point.isAligned) {
-            size = baseEmojiSize * alignedSizeMultiplier;
-        } else {
-            size = point.layer === 'layer_1' ? baseEmojiSize : baseEmojiSize * layer2SizeMultiplier;
-        }
-        
-        // Check if mouse is within hit radius
-        const distance = Math.sqrt(
-            Math.pow(x - scaledMouseX, 2) + 
-            Math.pow(y - scaledMouseY, 2)
-        );
-        const hitRadius = size / 2;
-        
+        if (!point.isAligned || point.isInactive || point.opacity < 0.15) continue;
+        const distance = Math.hypot(point.currentAlignedX - scaledMouseX, point.currentAlignedY - scaledMouseY);
+        const hitRadius = (baseEmojiSize * alignedSizeMultiplier) / 2;
         if (distance < hitRadius && distance < closestDistance) {
             closestPoint = point;
             closestDistance = distance;
         }
     }
-    
-    return closestPoint;
+    if (closestPoint) return closestPoint;
+
+    // Otherwise the topmost grid image under the cursor (same parallax the grid is drawn with)
+    const parallaxX = (smoothMouseX - centerX) * parallaxStrength;
+    const parallaxY = (smoothMouseY - centerY) * parallaxStrength;
+    return hitTestGridPoint(scaledMouseX, scaledMouseY, parallaxX, parallaxY, true);
+}
+
+// Start the flight from the project row back to the grid for the given points
+function sendPointsBackToGrid(pointsToReturn, now) {
+    const desktop = !isMobileDevice();
+    const rowWidth = alignedRowTotalWidthWorld;
+    // World X at the middle of the screen — used to pick which carousel copy flies back
+    const viewCenterWorldX = viewW / 2 - cameraPanX / Math.max(0.0001, globalZoomLevel);
+    pointsToReturn.forEach(p => {
+        let fromX = p.currentAlignedX;
+        let fromSize = p.currentSize;
+        if (desktop) {
+            // The row is drawn three times for the endless carousel: continue from the copy
+            // the viewer is actually looking at.
+            if (rowWidth > 0) {
+                let best = fromX;
+                for (let k = -1; k <= 1; k++) {
+                    const candidate = p.currentAlignedX + k * rowWidth;
+                    if (Math.abs(candidate - viewCenterWorldX) < Math.abs(best - viewCenterWorldX)) best = candidate;
+                }
+                fromX = best;
+            }
+            // Row size is the image HEIGHT, grid size is its LONGER side — convert so the
+            // image does not change size on the first frame of the flight.
+            if (p.targetImageWidth !== undefined) {
+                const data = imageCache[p.imagePath];
+                const aspectRatio = (data && data.aspectRatio > 0) ? data.aspectRatio : 1;
+                if (aspectRatio > 1) fromSize = p.currentSize * aspectRatio;
+            }
+            p.flightDuration = SELECTION_EXIT_DURATION;
+            p.targetImageWidth = undefined;
+            p.isHovered = false;
+            p.hoverSize = 1.0;
+            p.hoverStartTime = 0;
+        }
+        p.isAligned = false;
+        p.targetX = p.originalBaseX;
+        p.targetY = p.originalBaseY;
+        p.isInactive = false; // Reset inactive flag
+        p.targetSize = p.layer === 'layer_1' ? baseEmojiSize : baseEmojiSize * layer2SizeMultiplier;
+        p.startX = fromX;
+        p.startY = p.currentAlignedY;
+        p.startSize = fromSize;
+        p.currentAlignedX = fromX;
+        p.currentSize = fromSize;
+        p.alignmentStartTime = now;
+    });
+}
+
+// Opening a project while another is still open (or still flying home): hand the old row
+// back to the grid first so none of its images are left stranded at row size.
+function releaseStaleAlignment(nextFolderPath) {
+    const stale = points.filter(p => p.isAligned && (p.folderPath || normalizeFolderPathFromImagePath(p.imagePath)) !== nextFolderPath);
+    if (stale.length) {
+        sendPointsBackToGrid(stale, performance.now());
+        scheduleRowRelease();
+    }
+    if (alignedFolderPath !== nextFolderPath) selectionAnimationHasRunForCurrentAlignment = false;
 }
 
 // Unalign emojis - restore to original positions with animation
@@ -3063,36 +3579,23 @@ function unalignEmojis() {
         exitConnectionMode();
     }
     
-    // Exit zoom target: 20% closer than full zoom-out level
-    selectionZoomOutExit = selectionTargetZoomOut + (1.0 - selectionTargetZoomOut) * 0.2;
-    // Start reverse animation (phase -1): zoom out while images return
-    selectionAnimationPhase = -1;
-    selectionPhaseStartTime = now;
-    selectionStartZoom = globalZoomLevel;
-    selectionStartPanX = cameraPanX;
-    selectionStartPanY = cameraPanY;
-    
+    const desktop = !isMobileDevice();
+    if (desktop) {
+        // One eased move back to the home camera while the images fly back to the grid
+        selectionAnimationPhase = -1;
+        selectionPhaseStartTime = now;
+        selectionStartZoom = globalZoomLevel;
+        selectionStartPanX = cameraPanX;
+        selectionStartPanY = cameraPanY;
+        isZoomTransitioning = false;
+        zoomVelocity = 0;
+    }
+
     // Store aligned emojis before clearing array
     const emojisToUnalign = [...alignedEmojis];
-    
-    emojisToUnalign.forEach(p => {
-        p.isAligned = false;
-        p.targetX = p.originalBaseX;
-        p.targetY = p.originalBaseY;
-        p.isInactive = false; // Reset inactive flag
-        // Reset target size to original size
-        if (p.layer === 'layer_1') {
-            p.targetSize = baseEmojiSize;
-        } else {
-            p.targetSize = baseEmojiSize * layer2SizeMultiplier;
-        }
-        // Initialize animation start values for smooth return
-        p.startX = p.currentAlignedX;
-        p.startY = p.currentAlignedY;
-        p.startSize = p.currentSize;
-        p.alignmentStartTime = now;
-    });
-    
+    sendPointsBackToGrid(emojisToUnalign, now);
+    if (desktop) scheduleRowRelease();
+
     alignedEmojis = [];
     alignedEmojiIndex = null;
     alignedFolderPath = null;
@@ -3119,8 +3622,8 @@ function unalignEmojis() {
     panVelocityY = 0;
     
     // Reset mouse position to center (original screen space position)
-    targetMouseX = canvas.width / 2;
-    targetMouseY = canvas.height / 2;
+    targetMouseX = viewW / 2;
+    targetMouseY = viewH / 2;
     smoothMouseX = targetMouseX;
     smoothMouseY = targetMouseY;
     
@@ -3134,7 +3637,7 @@ function unalignEmojis() {
         });
     }
 
-    // Set zoom target to default (will be animated by phase -1)
+    // Zoom index back to default (the exit move animates the camera there)
     currentZoomIndex = initialZoomIndex;
     
     // Update back button visibility
@@ -3415,6 +3918,7 @@ function handleEmojiClick(clickedPoint) {
     // Align all emojis from the same folder
     const clickedFolderPath = clickedPoint.folderPath || normalizeFolderPathFromImagePath(clickedPoint.imagePath);
     
+    releaseStaleAlignment(clickedFolderPath);
     alignedEmojiIndex = clickedPoint.emojiIndex; // Keep for compatibility
     const folderPoints = points.filter((p) => {
         const pFolder = p.folderPath || normalizeFolderPathFromImagePath(p.imagePath);
@@ -4064,6 +4568,7 @@ function selectIndexFolder(folderPath, folderName) {
 function enterSelectionModeForFolder(folderPath, folderPoints, animateLayout = true) {
     // Trigger lazy thumbnail loading the first time user enters any project
     if (typeof window.__mobileTriggerThumbLoad === 'function') window.__mobileTriggerThumbLoad();
+    if (!isMobileDevice()) releaseStaleAlignment(folderPath);
     const merged = mergeFolderImagesWithAllPaths(folderPath, folderPoints);
     alignedEmojiIndex =
         folderPoints[0]?.emojiIndex ??
@@ -4384,7 +4889,11 @@ function positionFilterButtons() {
         // Position we are button so that total spacing (3 spaces + 8 dashes + 3 spaces) fits between it and stage design
         const weAreLeft = stageDesignLeft - scaledSpacingWidth - weAreTextWidth - separatorPadding;
         _weAreBtnExploreLeft = weAreLeft; // cache for transition animation
-        weAreBtn.style.left = `${weAreLeft}px`;
+        // While the index is open the button sits above the project-name column; only
+        // its explore position is refreshed here (used when sliding back).
+        const indexEl = document.getElementById('projectIndex');
+        const indexOpen = !!indexEl && indexEl.classList.contains('visible') && !indexEl.classList.contains('fading-out');
+        weAreBtn.style.left = indexOpen ? '50px' : `${weAreLeft}px`;
         weAreBtn.style.position = 'fixed';
         weAreBtn.style.right = 'auto';
         
@@ -4474,12 +4983,14 @@ function draw() {
         return; // Skip drawing if canvas isn't ready
     }
 
-    // DPR base transform — all drawing happens in CSS-pixel space
+    // DPR base transform — all drawing below happens in CSS-pixel space
+    ctx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
+
     // IMPORTANT: Don't draw images until all words have appeared
     if (!allWordsVisible) {
         // Only draw black background while words are loading
         ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, viewW, viewH);
         gifOverlayFrameReset();
         gifOverlayHideUnused();
         return;
@@ -4493,8 +5004,9 @@ function draw() {
     
     // Smooth mouse position (optimized - only when not dragging for better performance)
     if (!isDragging) {
-    smoothMouseX += (targetMouseX - smoothMouseX) * 0.1;
-    smoothMouseY += (targetMouseY - smoothMouseY) * 0.1;
+        const mouseEase = damp(0.1);
+        smoothMouseX += (targetMouseX - smoothMouseX) * mouseEase;
+        smoothMouseY += (targetMouseY - smoothMouseY) * mouseEase;
     } else {
         // Direct update while dragging for better responsiveness
         smoothMouseX = targetMouseX;
@@ -4543,8 +5055,8 @@ function draw() {
     // Do NOT update it here - this ensures zoom uses the exact mouse position from wheel/touch events
     
     // Calculate center for gyroscope smoothing (used later in parallax calculation)
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    const centerX = viewW / 2;
+    const centerY = viewH / 2;
     
     // Connection mode labels: fade in 0.5s, fade out 0.1s on exit
     const labelsNow = performance.now();
@@ -4555,123 +5067,32 @@ function draw() {
         if (connectionModeLabelsOpacity <= 0) lastConnectedPointsForLabels = [];
     }
     
-    // Handle selection animation phases (desktop only)
+    // Selection camera move (desktop only): one continuous eased move each way.
     if (selectionAnimationPhase !== 0 && !isMobile) {
         const now = performance.now();
-        const phaseElapsed = now - selectionPhaseStartTime;
-        
-        if (selectionAnimationPhase === 1) {
-            // Phase 1: Zoom in on line image grid + pan to center (1.2 seconds)
-            const rawProgress = Math.min(phaseElapsed / SELECTION_PHASE1_DURATION, 1.0);
-            const easeProgress = easeOutExpoInertia(rawProgress);
-            
-            // Animate zoom in directly on the row
-            globalZoomLevel = selectionStartZoom + (selectionTargetZoomIn - selectionStartZoom) * easeProgress;
-            targetZoomLevel = globalZoomLevel;
-            
-            // Animate pan to center (row centered)
-            cameraPanX = selectionStartPanX + (selectionZoomOutPanX - selectionStartPanX) * easeProgress;
-            cameraPanY = selectionStartPanY + (0 - selectionStartPanY) * easeProgress;
-            targetCameraPanX = cameraPanX;
-            targetCameraPanY = cameraPanY;
-            
-            // Check if phase 1 is complete
-            if (rawProgress >= 1.0) {
-                // Move to delay phase
-                selectionAnimationPhase = 1.5;
-                selectionPhaseStartTime = now;
-                globalZoomLevel = selectionTargetZoomIn;
-                cameraPanX = selectionZoomOutPanX;
-                cameraPanY = 0;
-            }
-        } else if (selectionAnimationPhase === 1.5) {
-            // Delay phase: 0.25 seconds before smooth scroll to clicked image
-            globalZoomLevel = selectionTargetZoomIn;
-            cameraPanX = selectionZoomOutPanX;
-            cameraPanY = 0;
-            targetZoomLevel = globalZoomLevel;
-            targetCameraPanX = cameraPanX;
-            targetCameraPanY = cameraPanY;
-            
-            // Check if delay is complete
-            if (phaseElapsed >= SELECTION_PHASE_DELAY) {
-                selectionAnimationPhase = 2;
-                selectionPhaseStartTime = now;
-                selectionStartZoom = selectionTargetZoomIn;
-                selectionStartPanX = selectionZoomOutPanX;
-            }
-        } else if (selectionAnimationPhase === 2) {
-            // Phase 2: Smooth scroll/pan to clicked image (1.2 seconds)
-            const rawProgress = Math.min(phaseElapsed / SELECTION_PHASE2_DURATION, 1.0);
-            const easePan = easeOutCubic(rawProgress); // smooth pan to clicked image
-            
-            // Zoom stays at selectionTargetZoomIn (already there from phase 1)
-            globalZoomLevel = selectionTargetZoomIn;
-            targetZoomLevel = globalZoomLevel;
-            
-            // Animate pan from center to clicked image
-            cameraPanX = selectionStartPanX + (selectionFinalPanX - selectionStartPanX) * easePan;
-            targetCameraPanX = cameraPanX;
-            
-            // Check if phase 2 is complete
-            if (rawProgress >= 1.0) {
-                selectionAnimationPhase = 0;
-                carouselAutoScrollPaused = false; // Carousel starts when animation completes
-                globalZoomLevel = selectionTargetZoomIn;
-                cameraPanX = selectionFinalPanX;
-                targetZoomLevel = globalZoomLevel;
-                targetCameraPanX = cameraPanX;
-            }
-        } else if (selectionAnimationPhase === -1) {
-            // Reverse Phase 1: Zoom out (20% closer than full grid) + images start moving back (1.2 seconds)
-            const rawProgress = Math.min(phaseElapsed / SELECTION_PHASE1_DURATION, 1.0);
-            const easeProgress = easeOutExpoInertia(rawProgress);
-            
-            // Animate zoom out to selectionZoomOutExit (20% closer than selectionTargetZoomOut)
-            globalZoomLevel = selectionStartZoom + (selectionZoomOutExit - selectionStartZoom) * easeProgress;
-            targetZoomLevel = globalZoomLevel;
-            
-            // Animate pan to center
-            cameraPanX = selectionStartPanX + (selectionZoomOutPanX - selectionStartPanX) * easeProgress;
-            cameraPanY = selectionStartPanY + (0 - selectionStartPanY) * easeProgress;
-            targetCameraPanX = cameraPanX;
-            targetCameraPanY = cameraPanY;
-            
-            // Check if reverse phase 1 is complete
-            if (rawProgress >= 1.0) {
-                selectionAnimationPhase = -2;
-                selectionPhaseStartTime = now;
-                globalZoomLevel = selectionZoomOutExit;
-                cameraPanX = selectionZoomOutPanX;
-                cameraPanY = 0;
-            }
-        } else if (selectionAnimationPhase === -2) {
-            // Reverse Phase 2: Zoom to 1.0 from selectionZoomOutExit (1.2 seconds)
-            const rawProgress = Math.min(phaseElapsed / SELECTION_PHASE2_DURATION, 1.0);
-            const easeProgress = easeOutExpoInertia(rawProgress);
-            
-            // Animate zoom from exit zoom level to 1.0
-            globalZoomLevel = selectionZoomOutExit + (1.0 - selectionZoomOutExit) * easeProgress;
-            targetZoomLevel = globalZoomLevel;
-            
-            // Animate pan from zoomed-out center to 0,0
-            cameraPanX = selectionZoomOutPanX + (0 - selectionZoomOutPanX) * easeProgress;
-            cameraPanY = 0;
-            targetCameraPanX = cameraPanX;
-            targetCameraPanY = cameraPanY;
-            
-            // Check if reverse animation is complete
-            if (rawProgress >= 1.0) {
-                selectionAnimationPhase = 0;
-                carouselAutoScrollPaused = false; // Reset for next entry
-                globalZoomLevel = 1.0;
-                cameraPanX = 0;
-                cameraPanY = 0;
-                targetZoomLevel = 1.0;
-                targetCameraPanX = 0;
-                targetCameraPanY = 0;
-            }
+        const entering = selectionAnimationPhase > 0;
+        const duration = entering ? SELECTION_ENTER_DURATION : SELECTION_EXIT_DURATION;
+        const rawProgress = Math.min((now - selectionPhaseStartTime) / duration, 1.0);
+        const easeProgress = easeSelectionMove(rawProgress);
+        const endZoom = entering ? selectionTargetZoomIn : zoomLevels[initialZoomIndex];
+        const endPanX = entering ? selectionFinalPanX : initialCameraPanX;
+        const endPanY = entering ? 0 : initialCameraPanY;
+
+        // Geometric interpolation keeps the perceived zoom speed constant
+        globalZoomLevel = selectionStartZoom * Math.pow(endZoom / Math.max(0.0001, selectionStartZoom), easeProgress);
+        cameraPanX = selectionStartPanX + (endPanX - selectionStartPanX) * easeProgress;
+        cameraPanY = selectionStartPanY + (endPanY - selectionStartPanY) * easeProgress;
+
+        if (rawProgress >= 1.0) {
+            selectionAnimationPhase = 0;
+            carouselAutoScrollPaused = false; // carousel starts once the row has settled
+            globalZoomLevel = endZoom;
+            cameraPanX = endPanX;
+            cameraPanY = endPanY;
         }
+        targetZoomLevel = globalZoomLevel;
+        targetCameraPanX = cameraPanX;
+        targetCameraPanY = cameraPanY;
     }
     
     
@@ -4720,7 +5141,7 @@ function draw() {
             const inertiaDecay = isMobile ? 0.96 : 0.96; // Same decay for both
             // Mobile: reduce zoom speed by 3x (0.25 / 3 = 0.083)
             const zoomMultiplier = isMobile ? 0.083 : 0.25;
-            const newTargetZoom = targetZoomLevel * (1.0 + zoomVelocity * zoomMultiplier);
+            const newTargetZoom = targetZoomLevel * (1.0 + zoomVelocity * zoomMultiplier * frameScale);
             
             // Limit max zoom out to random image grid size (mobile only)
             let clampedZoom;
@@ -4728,7 +5149,7 @@ function draw() {
                 const box = getBoundingBox();
                 const gridWidth = box.width;
                 const gridHeight = box.height;
-                const maxZoomOut = Math.min(canvas.width / gridWidth, canvas.height / gridHeight);
+                const maxZoomOut = Math.min(viewW / gridWidth, viewH / gridHeight);
                 clampedZoom = Math.max(maxZoomOut, Math.min(maxZoom, newTargetZoom));
             } else {
                 clampedZoom = Math.max(minZoom, Math.min(maxZoom, newTargetZoom));
@@ -4751,12 +5172,12 @@ function draw() {
             }
             
             // Decay velocity (light inertia)
-            zoomVelocity *= inertiaDecay;
+            zoomVelocity *= decayPerFrame(inertiaDecay);
         }
         
         // Mobile: reduce zoom interpolation speed by 3x
         const isMobile = isMobileDevice();
-        const zoomSmoothness = isMobile ? 0.013 : 0.04; // 3x slower for mobile (0.04 / 3 ≈ 0.013)
+        const zoomSmoothness = damp(isMobile ? 0.013 : 0.04); // 3x slower for mobile (0.04 / 3 ≈ 0.013)
         globalZoomLevel += (targetZoomLevel - globalZoomLevel) * zoomSmoothness;
         
         // Smoothly interpolate camera pan to keep zoom focal point fixed
@@ -4778,7 +5199,7 @@ function draw() {
         
         // Calculate scroll offset and apply to camera pan Y
         // Use layout-derived content height; compute max scroll in world units, then convert to screen px.
-        const viewHeightWorld = canvas.height / Math.max(0.0001, globalZoomLevel);
+        const viewHeightWorld = viewH / Math.max(0.0001, globalZoomLevel);
         const maxScrollWorld = Math.max(0, mobileAlignedContentHeightWorld - viewHeightWorld);
         const scrollOffsetWorld = mobileScrollPosition * maxScrollWorld;
         const scrollOffsetScreen = scrollOffsetWorld * globalZoomLevel;
@@ -4815,16 +5236,18 @@ function draw() {
             // Apply light velocity-based inertia when not dragging (only if there's significant velocity)
             if (Math.abs(panVelocityX) > 0.1 || Math.abs(panVelocityY) > 0.1) {
                 const inertiaStrength = inSelectionMode ? 1.2 : 2; // Gentler inertia in selection mode
-                targetCameraPanX += panVelocityX * inertiaStrength;
-                targetCameraPanY += panVelocityY * inertiaStrength;
+                targetCameraPanX += panVelocityX * inertiaStrength * frameScale;
+                targetCameraPanY += panVelocityY * inertiaStrength * frameScale;
                 // Decay velocity over time (slower decay for longer, smoother inertia)
-                panVelocityX *= decay;
-                panVelocityY *= decay;
+                const velocityDecay = decayPerFrame(decay);
+                panVelocityX *= velocityDecay;
+                panVelocityY *= velocityDecay;
             }
             
             // Smooth interpolation towards target (only when not dragging)
-            cameraPanX += (targetCameraPanX - cameraPanX) * smooth;
-            cameraPanY += (targetCameraPanY - cameraPanY) * smooth;
+            const panEase = damp(smooth);
+            cameraPanX += (targetCameraPanX - cameraPanX) * panEase;
+            cameraPanY += (targetCameraPanY - cameraPanY) * panEase;
             
             // Infinite carousel: wrap pan in selection mode so right of last image shows first (only when not animating)
             if (alignedEmojiIndex !== null && alignedRowTotalWidthWorld > 0 && !isMobileDevice()) {
@@ -4843,18 +5266,18 @@ function draw() {
     
     // Clear canvas with black background
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, viewW, viewH);
 
     // Draw static background grid in SCREEN space (not affected by zoom/pan)
     // Skip on mobile home when static image is used (it has a clean black background)
     const gridPattern = getGridPattern();
     if (gridPattern && !isMobileDevice()) {
         ctx.save();
-        // Ensure identity transform so pattern doesn't inherit camera transform
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        // Base (screen-space) transform so the pattern doesn't inherit the camera transform
+        ctx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
         ctx.globalAlpha = 1.0;
         ctx.fillStyle = gridPattern;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, viewW, viewH);
         ctx.restore();
     }
     
@@ -4896,55 +5319,74 @@ function draw() {
 
     gifOverlayFrameReset();
     
-    // Sort points by opacity before drawing: non-selected (low opacity) first, then selected (high opacity)
-    // This ensures selected images always appear on top
-    // IMPORTANT: For mobile selection mode, ensure random grid (non-aligned) is drawn first, then aligned images
-    const alignedPathSet = new Set((alignedEmojis || []).map(p => p.imagePath));
-    const sortedPoints = [...points].sort((a, b) => {
-        // Check if points are aligned (in selection mode)
-        const aIsAligned = a.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(a.imagePath));
-        const bIsAligned = b.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(b.imagePath));
-        
-        // If one is aligned and other is not, draw non-aligned first (random grid behind)
-        if (!aIsAligned && bIsAligned) return -1;
-        if (aIsAligned && !bIsAligned) return 1;
-        
-        // If both have opacity 0, maintain order
-        if (a.opacity < 0.01 && b.opacity < 0.01) return 0;
-        
-        // If one has opacity 0 and other doesn't, put opacity 0 first
-        if (a.opacity < 0.01 && b.opacity >= 0.01) return -1;
-        if (a.opacity >= 0.01 && b.opacity < 0.01) return 1;
-        
-        // Otherwise sort by opacity (low to high) so high opacity images are drawn last (on top)
-        return a.opacity - b.opacity;
-    });
-    
-    // MOBILE: draw pre-rendered static grid image with fade in/out (0.2s)
-    const showStaticGrid = isMobileDevice() && !!_mobileGridImg;
-    if (showStaticGrid) {
-        // Target: 1.0 on home, 0.0 in any section
-        const _gridTarget = isMobileHome ? 1.0 : 0.0;
-        // ~0.2s fade at 30fps = 6 frames → step ≈ 0.17 per frame
-        const _fadeStep = 0.17;
-        if (_mobileGridAlpha < _gridTarget) {
-            _mobileGridAlpha = Math.min(_gridTarget, _mobileGridAlpha + _fadeStep);
-        } else if (_mobileGridAlpha > _gridTarget) {
-            _mobileGridAlpha = Math.max(_gridTarget, _mobileGridAlpha - _fadeStep);
-        }
-        if (_mobileGridAlpha > 0.001) {
-            ctx.globalAlpha = _mobileGridAlpha;
-            ctx.drawImage(_mobileGridImg, -canvas.width, 0, canvas.width * 3, canvas.height);
-            ctx.globalAlpha = 1.0;
+    const alignedPathSet = getAlignedPathSet();
+    const rowWidthWorld = alignedRowTotalWidthWorld;
+    const desktopRowActive = alignedEmojiIndex !== null && !isMobile && rowWidthWorld > 0;
+
+    // ── Hover: resolved once per frame ───────────────────────────────────────
+    // Exactly one image can be hovered — the topmost one under the cursor (the same rule a
+    // click uses). Deciding it per image made overlapping neighbours fight over the hover
+    // every frame.
+    const allowHoverLogic = hasUserInteracted && mouseOverCanvas && !isIndexMode && !isMobileHome;
+    let hoverCandidate = null;
+    if (allowHoverLogic) {
+        hoverCandidate = hitTestGridPoint(scaledMouseXForHover, scaledMouseYForHover, offsetX, offsetY, false);
+
+        if (hoverCandidate !== hoveredPoint) {
+            const previous = hoveredPoint;
+            if (previous) {
+                // Stopped hovering the previous image
+                hoveredPoint = null;
+                hoverStartTime = 0;
+                // Hover-triggered connection mode ends when the cursor leaves the project's
+                // images; sliding from one image of the project to another keeps it.
+                const staysInProject = !!hoverCandidate && isConnectionMode && connectedPoints.includes(hoverCandidate);
+                if (isConnectionMode && !isConnectionModeClicked && !staysInProject) {
+                    exitConnectionMode();
+                }
+                // Restore opacity for all images ONLY if not in selection/connection mode
+                if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
+                    for (let i = 0; i < points.length; i++) points[i].targetOpacity = 1.0;
+                }
+            }
+            if (hoverCandidate) {
+                // New image is being hovered
+                hoveredPoint = hoverCandidate;
+                hoverStartTime = currentTime;
+                const hoveredFolder = getPointFolder(hoverCandidate);
+                const sameProject = !!previous && getPointFolder(previous) === hoveredFolder;
+                if (!sameProject) hoveredLinesOpacity = 0.0;
+                hoveredConnectedPoints = points
+                    .filter(p => getPointFolder(p) === hoveredFolder)
+                    .sort((a, b) => a.originalBaseX - b.originalBaseX);
+            }
+        } else if (hoveredPoint && alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
+            // Still hovering: after a short dwell the project's images connect and the rest fade
+            const hoveredFolder = getPointFolder(hoveredPoint);
+            const hoverDuration = currentTime - hoverStartTime;
+            const hoverTimeout = isMobile ? HOVER_FADE_TIMEOUT : HOVER_FADE_TIMEOUT_WEB;
+            if (hoverDuration >= hoverTimeout) {
+                enterConnectionMode(hoveredPoint, false);
+                for (let i = 0; i < points.length; i++) {
+                    points[i].targetOpacity = getPointFolder(points[i]) === hoveredFolder ? 1.0 : 0.0;
+                }
+                hoveredLinesOpacity = 1.0;
+            } else {
+                const fadeProgress = Math.min(hoverDuration / hoverTimeout, 1.0);
+                const fadeSpeed = isMobile ? HOVER_FADE_IN_SPEED : HOVER_FADE_IN_SPEED_WEB;
+                hoveredLinesOpacity += (fadeProgress - hoveredLinesOpacity) * damp(fadeSpeed);
+            }
         }
     }
 
-    // Draw all points in sorted order (non-selected first, selected on top)
-    // On mobile with static image: only draw aligned (project detail) images, skip background thumbnails
-    sortedPoints.forEach((point, sortIndex) => {
+    const sizeEase = damp(0.1);
+    let gifOverlaySlot = 0;
+
+    // Draws one image (and advances its opacity / flight / hover-zoom animation)
+    const drawPoint = (point) => {
         const speed = point.layer === 'layer_1' ? layer1Speed : layer2Speed;
-        
-        // Animate opacity (optimized: skip if already at target)
+
+        // Animate opacity
         // For selection mode fade out: use fast fade (250ms) for non-aligned images
         // For mobile version: use 300ms fade out for random grid
         // Use faster fade in when restoring opacity (when mouse leaves)
@@ -4966,11 +5408,11 @@ function draw() {
             currentOpacitySpeed = (point.targetOpacity > point.opacity && point.opacity < 0.5) ? HOVER_FADE_IN_SPEED : opacitySmoothness;
         }
         if (Math.abs(point.opacity - point.targetOpacity) > 0.001) {
-            point.opacity += (point.targetOpacity - point.opacity) * currentOpacitySpeed;
+            point.opacity += (point.targetOpacity - point.opacity) * damp(currentOpacitySpeed);
         } else {
             point.opacity = point.targetOpacity;
         }
-        
+
         // Mobile: in selection mode or with category menu open, never draw non-aligned grid (fixes first-time grid staying visible)
         if (isMobileVersion && !point.isAligned) {
             if (alignedEmojiIndex !== null) {
@@ -4993,36 +5435,36 @@ function draw() {
                 return;
             }
         }
-        
+
         let x, y;
         let imageSize;
-        
-        if (point.isAligned || (point.alignmentStartTime > 0 && !point.isAligned)) {
-            // Time-based smooth animation with logarithmic easing (1.2 seconds duration)
-            const elapsed = currentTime - point.alignmentStartTime; // Use cached time
-            const progress = Math.min(elapsed / alignmentAnimationDuration, 1.0);
-            
-            // Use logarithmic easing for smooth, natural-feeling animations
-            const easeProgress = easeOutLog(progress);
-            
-            // Interpolate position and size
+
+        if (point.isAligned || point.alignmentStartTime > 0) {
+            // Flight between grid and project row (time-based)
+            const flightMs = point.flightDuration || alignmentAnimationDuration;
+            const progress = point.alignmentStartTime > 0
+                ? Math.min((currentTime - point.alignmentStartTime) / flightMs, 1.0)
+                : 1.0;
+            const easeProgress = isMobile ? easeOutLog(progress) : easeSelectionMove(progress);
+
             point.currentAlignedX = point.startX + (point.targetX - point.startX) * easeProgress;
             point.currentAlignedY = point.startY + (point.targetY - point.startY) * easeProgress;
             point.currentSize = point.startSize + (point.targetSize - point.startSize) * easeProgress;
-            
-            // If aligned, use target position; otherwise transitioning back
+
             if (point.isAligned) {
                 x = point.currentAlignedX;
                 y = point.currentAlignedY;
                 imageSize = point.currentSize;
+                if (progress >= 1.0) point.alignmentStartTime = 0; // landed
             } else {
-                // Transitioning back to original - combine with parallax
-                x = point.currentAlignedX + (offsetX * speed);
-                y = point.currentAlignedY + (offsetY * speed);
+                // Flying back to the grid: blend the mouse parallax back in as it lands
+                const parallaxBlend = isMobile ? 1 : easeProgress;
+                x = point.currentAlignedX + (offsetX * speed * parallaxBlend);
+                y = point.currentAlignedY + (offsetY * speed * parallaxBlend);
                 imageSize = point.currentSize;
-                // Reset animation start time when transition completes
                 if (progress >= 1.0) {
                     point.alignmentStartTime = 0;
+                    point.flightDuration = 0;
                     point.currentAlignedX = point.originalBaseX;
                     point.currentAlignedY = point.originalBaseY;
                 }
@@ -5031,183 +5473,122 @@ function draw() {
             // Normal state - use original position with parallax
             x = point.originalBaseX + (offsetX * speed);
             y = point.originalBaseY + (offsetY * speed);
-            
+
             // Smoothly animate size change
-            point.currentSize += (point.targetSize - point.currentSize) * 0.1;
-            
-            // Check if hovered (using cached coordinates)
-            // Only allow hover if user has interacted AND mouse is actually over the canvas AND not in index mode
-            const allowHoverLogic = hasUserInteracted && mouseOverCanvas && !isIndexMode;
-            const isHovered = allowHoverLogic && isPointHovered(x, y, scaledMouseXForHover, scaledMouseYForHover, point.currentSize / 2);
-            
-            // Track hover state for timeout (fade unrelated images after 1 second, 2x faster)
-            if (allowHoverLogic) {
-                if (isHovered && hoveredPoint !== point) {
-                    // New point is being hovered
-                    hoveredPoint = point;
-                    hoverStartTime = currentTime;
-                    // Reset hovered lines
-                    hoveredConnectedPoints = [];
-                    hoveredLinesOpacity = 0.0;
-                } else if (!isHovered && hoveredPoint === point) {
-                    // Stopped hovering this point
-                    hoveredPoint = null;
-                    hoverStartTime = 0;
-                    
-                    // If connection mode was auto-entered (not clicked), exit it when mouse moves away
-                    if (isConnectionMode && !isConnectionModeClicked) {
-                        exitConnectionMode();
-                    }
-                    
-                    // Restore opacity for all images ONLY if not in selection/connection mode
-                    // In selection/connection mode, opacity should remain as set by selection
-                    if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
-                        points.forEach(p => {
-                            p.targetOpacity = 1.0;
-                        });
-                    }
-                    // Start fade out hovered lines (will be animated smoothly in draw loop)
-                    // hoveredLinesOpacity will fade to 0.0 in draw loop
-                } else if (isHovered && hoveredPoint === point) {
-                    // Still hovering - set connection points from precomputed (use current point refs so positions are correct)
-                    const hoveredFolder = getPointFolder(point);
-                    const precomputed = precomputedConnectionTrajectories.get(hoveredFolder);
-                    if (precomputed && precomputed.points.length > 1) {
-                        const currentRefs = precomputed.points.map(p => points.find(cur => cur.imagePath === p.imagePath)).filter(Boolean);
-                        currentRefs.sort((a, b) => a.originalBaseX - b.originalBaseX);
-                        hoveredConnectedPoints = currentRefs.length > 1 ? currentRefs : points.filter(p => getPointFolder(p) === hoveredFolder).sort((a, b) => a.originalBaseX - b.originalBaseX);
-                    } else {
-                        hoveredConnectedPoints = points.filter(p => getPointFolder(p) === hoveredFolder);
-                        hoveredConnectedPoints.sort((a, b) => a.originalBaseX - b.originalBaseX);
-                    }
-                    // Don't apply fade/connection-mode logic if already in selection/connection mode
-                    if (alignedEmojiIndex === null && activeTags.size === 0 && !isConnectionMode) {
-                        const hoverDuration = currentTime - hoverStartTime;
-                        const hoverTimeout = (typeof isMobileDevice === 'function' && isMobileDevice()) ? HOVER_FADE_TIMEOUT : HOVER_FADE_TIMEOUT_WEB;
-                        if (hoverDuration >= hoverTimeout) {
-                            enterConnectionMode(point, false);
-                            points.forEach(p => {
-                                p.targetOpacity = getPointFolder(p) === hoveredFolder ? 1.0 : 0.0;
-                            });
-                            hoveredLinesOpacity = 1.0;
-                        } else {
-                            const fadeProgress = Math.min(hoverDuration / hoverTimeout, 1.0);
-                            const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-                            const fadeSpeed = isMobile ? HOVER_FADE_IN_SPEED : HOVER_FADE_IN_SPEED_WEB;
-                            hoveredLinesOpacity += (fadeProgress - hoveredLinesOpacity) * fadeSpeed;
-                        }
-                    }
-                }
-            } else {
-                // No interaction yet: keep hover state cleared
-                point.isHovered = false;
-                point.hoverStartTime = 0;
-            }
-            
-            // Smooth hover zoom transition (0.5 seconds)
+            point.currentSize += (point.targetSize - point.currentSize) * sizeEase;
+
+            // Hover zoom (0.5 s, ease-out). A change of mind mid-zoom continues from the
+            // current size instead of jumping to the far end first.
+            const isHovered = point === hoverCandidate;
             if (isHovered !== point.isHovered) {
-                // Hover state changed - start transition
                 point.isHovered = isHovered;
+                point.hoverFromSize = point.hoverSize;
                 point.hoverStartTime = currentTime;
             }
-            
             if (point.hoverStartTime > 0) {
-                const elapsed = currentTime - point.hoverStartTime; // Use cached time
-                const progress = Math.min(elapsed / hoverZoomTransitionDuration, 1.0);
-                
+                const hoverTarget = point.isHovered ? hoverZoom : 1.0;
+                const hoverFrom = point.hoverFromSize !== undefined ? point.hoverFromSize : (point.isHovered ? 1.0 : hoverZoom);
+                const progress = Math.min((currentTime - point.hoverStartTime) / hoverZoomTransitionDuration, 1.0);
                 if (progress >= 1.0) {
-                    // Transition complete
-                    point.hoverSize = point.isHovered ? hoverZoom : 1.0;
-                    point.hoverStartTime = 0; // Reset to avoid future calculations
+                    point.hoverSize = hoverTarget;
+                    point.hoverStartTime = 0;
                 } else {
-                    // Smooth ease-out easing
                     const easeProgress = 1 - Math.pow(1 - progress, 3);
-                    
-                    if (point.isHovered) {
-                        // Zooming in
-                        point.hoverSize = 1.0 + (hoverZoom - 1.0) * easeProgress;
-                    } else {
-                        // Zooming out
-                        point.hoverSize = hoverZoom + (1.0 - hoverZoom) * easeProgress;
-                    }
-                }
-            } else {
-                // Initial state - only set if changed
-                const targetHoverSize = point.isHovered ? hoverZoom : 1.0;
-                if (Math.abs(point.hoverSize - targetHoverSize) > 0.001) {
-                    point.hoverSize = targetHoverSize;
+                    point.hoverSize = hoverFrom + (hoverTarget - hoverFrom) * easeProgress;
                 }
             }
-            
+
             imageSize = point.currentSize * point.hoverSize;
         }
-        
-        // Get image from cache (prefer full-res in selection, else thumbnail for grid)
+
+        // Don't draw if completely invisible
+        if (point.opacity <= 0.001) return;
+
+        // Image from cache (project row: display-resolution decode, otherwise the thumbnail)
         const imageData = imageCache[point.imagePath];
         const img = imageData ? (imageData.img || imageData.thumb) : null;
-        
-        // PERFORMANCE: Use globalAlpha directly (more efficient than save/restore)
-        // Only change globalAlpha if it's different (optimization)
-        if (Math.abs(ctx.globalAlpha - point.opacity) > 0.01) {
-            ctx.globalAlpha = point.opacity;
-        }
-        
-        // Don't draw if opacity is 0 (completely invisible)
-        if (point.opacity <= 0.001) {
-            // Skip drawing this image completely
-            return;
-        }
-        
-        // Draw image if loaded, otherwise skip
         // On mobile: NEVER draw background thumbnails — only aligned (project detail) images
-        const skipAsBgThumb = isMobileDevice() && !point.isAligned;
-        if (!skipAsBgThumb && img && imageData && !imageData.error) {
-            // Calculate dimensions maintaining aspect ratio (using helper function)
-            const dims = calculateImageDrawDimensions(point, imageData, imageSize);
-            const drawWidth = dims.width;
-            const drawHeight = dims.height;
-            
-            const halfWidth = drawWidth / 2;
-            const halfHeight = drawHeight / 2;
+        if ((isMobile && !point.isAligned) || !img || !imageData || imageData.error) return;
 
-            // Animated GIF: canvas 2d only ever paints the first frame (HTML spec). Selection/filter uses DOM <img> clones.
-            const isGifHtml = shouldKeepHtmlImageForCanvas(point.imagePath) && img.nodeName === 'IMG';
-            const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(point.imagePath));
-            const useGifDomOverlay = isGifHtml && (isSelectionRowImage || selectionAnimationPhase !== 0);
-            
-            // Infinite carousel: draw aligned images in three positions (left copy, main, right copy)
-            const drawOffsets = (point.isAligned && !isMobileDevice() && alignedRowTotalWidthWorld > 0)
-                ? [0, alignedRowTotalWidthWorld, -alignedRowTotalWidthWorld]
-                : [0];
-            
-            try {
-                for (let i = 0; i < drawOffsets.length; i++) {
-                    const drawX = x + drawOffsets[i];
-                    if (useGifDomOverlay) {
-                        placeGifOverlayClone(img, drawX, y, drawWidth, drawHeight, ctx.globalAlpha, sortIndex * 32 + i);
-                    } else {
-                        ctx.drawImage(img, drawX - halfWidth, y - halfHeight, drawWidth, drawHeight);
-                    }
+        const dims = calculateImageDrawDimensions(point, imageData, imageSize);
+        const drawWidth = dims.width;
+        const drawHeight = dims.height;
+        const halfWidth = drawWidth / 2;
+        const halfHeight = drawHeight / 2;
+
+        // Vertical cull (same for every carousel copy)
+        const halfScreenH = halfHeight * globalZoomLevel;
+        const screenY = (y - centerY) * globalZoomLevel + centerY + cameraPanY;
+        if (screenY + halfScreenH < 0 || screenY - halfScreenH > viewH) return;
+
+        // Animated GIF: canvas 2d only ever paints the first frame (HTML spec). Selection/filter uses DOM <img> clones.
+        const isGifHtml = shouldKeepHtmlImageForCanvas(point.imagePath) && img.nodeName === 'IMG';
+        const isSelectionRowImage = point.isAligned || (alignedEmojiIndex !== null && alignedPathSet.has(point.imagePath));
+        const useGifDomOverlay = isGifHtml && (isSelectionRowImage || selectionAnimationPhase !== 0);
+
+        ctx.globalAlpha = point.opacity;
+
+        // Infinite carousel: row images exist in three positions (main, right copy, left copy);
+        // only the copies that are on screen are drawn.
+        const copies = (point.isAligned && desktopRowActive) ? 3 : 1;
+        const halfScreenW = halfWidth * globalZoomLevel;
+        const slot = gifOverlaySlot++;
+        try {
+            for (let i = 0; i < copies; i++) {
+                const drawX = i === 0 ? x : (i === 1 ? x + rowWidthWorld : x - rowWidthWorld);
+                const screenX = (drawX - centerX) * globalZoomLevel + centerX + cameraPanX;
+                if (screenX + halfScreenW < 0 || screenX - halfScreenW > viewW) continue;
+                if (useGifDomOverlay) {
+                    placeGifOverlayClone(img, drawX, y, drawWidth, drawHeight, point.opacity, slot * 4 + i);
+                } else {
+                    ctx.drawImage(img, drawX - halfWidth, y - halfHeight, drawWidth, drawHeight);
                 }
-            } catch (e) {
-                // If drawImage fails, skip drawing
-                // Don't draw placeholder to avoid grey rectangles
             }
-            // image_names: small white label above image (name without extension), fade in 0.5s / fade out 0.1s
-            const showLabel = IMAGE_NAMES_ENABLED && connectionModeLabelsOpacity > 0.01 && (isConnectionMode ? connectedPoints.includes(point) : lastConnectedPointsForLabels.includes(point));
-            if (showLabel) {
-                const name = point.imagePath.split('/').pop().replace(/\.[^.]+$/, '') || 'image';
-                const prevAlpha = ctx.globalAlpha;
-                ctx.globalAlpha = connectionModeLabelsOpacity * point.opacity;
-                ctx.font = '14px Arial';
-                ctx.fillStyle = '#fff';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'bottom';
-                ctx.fillText(name, x, y - halfHeight - 6);
-                ctx.globalAlpha = prevAlpha;
-            }
+        } catch (e) {
+            // If drawImage fails (e.g. a bitmap released mid-frame), skip this image for the frame
         }
-    }); // end sortedPoints.forEach (skipped on mobile home with static grid)
+        // image_names: small white label above image (name without extension), fade in 0.5s / fade out 0.1s
+        const showLabel = IMAGE_NAMES_ENABLED && connectionModeLabelsOpacity > 0.01 && (isConnectionMode ? connectedPoints.includes(point) : lastConnectedPointsForLabels.includes(point));
+        if (showLabel) {
+            const name = point.imagePath.split('/').pop().replace(/\.[^.]+$/, '') || 'image';
+            ctx.globalAlpha = connectionModeLabelsOpacity * point.opacity;
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(name, x, y - halfHeight - 6);
+        }
+    };
+
+    // MOBILE: draw pre-rendered static grid image with fade in/out (0.2s)
+    const showStaticGrid = isMobileDevice() && !!_mobileGridImg;
+    if (showStaticGrid) {
+        // Target: 1.0 on home, 0.0 in any section
+        const _gridTarget = isMobileHome ? 1.0 : 0.0;
+        // ~0.2s fade at 30fps = 6 frames → step ≈ 0.17 per frame
+        const _fadeStep = 0.17;
+        if (_mobileGridAlpha < _gridTarget) {
+            _mobileGridAlpha = Math.min(_gridTarget, _mobileGridAlpha + _fadeStep);
+        } else if (_mobileGridAlpha > _gridTarget) {
+            _mobileGridAlpha = Math.max(_gridTarget, _mobileGridAlpha - _fadeStep);
+        }
+        if (_mobileGridAlpha > 0.001) {
+            ctx.globalAlpha = _mobileGridAlpha;
+            ctx.drawImage(_mobileGridImg, -viewW, 0, viewW * 3, viewH);
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    // Draw order is FIXED: grid images in their placement order, then the open project's row
+    // on top. (It used to be re-sorted by opacity every frame, so overlapping images swapped
+    // layers whenever their fades crossed — the grid flicker.) Nothing is ever re-stacked,
+    // not even on hover: a covered image simply shows as its neighbours fade.
+    for (let i = 0; i < points.length; i++) {
+        if (!points[i].isAligned) drawPoint(points[i]);
+    }
+    for (let i = 0; i < points.length; i++) {
+        if (points[i].isAligned) drawPoint(points[i]);
+    }
 
     // Draw extras: images in alignedEmojis that are NOT in points[] (images not picked for the random grid)
     // The main sortedPoints loop skips them; we draw and animate them here.
@@ -5241,9 +5622,7 @@ function draw() {
         // Check if mouse is over ANY connected point
         let mouseOverConnectedPoint = false;
         for (const cp of connectedPoints) {
-            const cpX = cp.originalBaseX + (offsetX * (cp.layer === 'layer_1' ? 1.0 : 0.5));
-            const cpY = cp.originalBaseY + (offsetY * (cp.layer === 'layer_1' ? 1.0 : 0.5));
-            if (isPointHovered(cpX, cpY, scaledMouseXForHover, scaledMouseYForHover, cp.currentSize / 2)) {
+            if (gridPointContains(cp, scaledMouseXForHover, scaledMouseYForHover, offsetX, offsetY)) {
                 mouseOverConnectedPoint = true;
                 break;
             }
@@ -5271,7 +5650,7 @@ function draw() {
         // Use faster fade speed for web (2x faster), slower for mobile
         const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
         const fadeSpeed = isMobile ? HOVER_FADE_IN_SPEED : HOVER_FADE_IN_SPEED_WEB;
-        hoveredLinesOpacity += (0.0 - hoveredLinesOpacity) * fadeSpeed;
+        hoveredLinesOpacity += (0.0 - hoveredLinesOpacity) * damp(fadeSpeed);
         if (hoveredLinesOpacity <= 0.001) {
             hoveredLinesOpacity = 0.0;
             hoveredConnectedPoints = [];
@@ -5355,7 +5734,7 @@ function draw() {
         const indicatorPadding = 8; // Padding from left edge
         const indicatorHeight = 60; // Height of the scroll indicator
         const indicatorMinY = 50; // Minimum Y position (top padding)
-        const indicatorMaxY = canvas.height - 50 - indicatorHeight; // Maximum Y position
+        const indicatorMaxY = viewH - 50 - indicatorHeight; // Maximum Y position
         
         // Calculate indicator position based on scroll position
         const indicatorY = indicatorMinY + (mobileScrollPosition * (indicatorMaxY - indicatorMinY));
@@ -5384,7 +5763,7 @@ function draw() {
     if (isMobileDevice() && alignedEmojiIndex !== null && mobileMoreBlockCenterYWorld > 0) {
         const moreEl = document.getElementById('projectMore');
         if (moreEl && moreEl.textContent.trim()) {
-            const centerY = canvas.height / 2;
+            const centerY = viewH / 2;
             const screenY = (mobileMoreBlockCenterYWorld - centerY) * globalZoomLevel + centerY + cameraPanY;
             const top = screenY - (mobileMoreBlockHeightWorld * globalZoomLevel) / 2;
             moreEl.style.position = 'fixed';
@@ -5407,7 +5786,7 @@ function draw() {
     if (isMobileDevice() && alignedEmojiIndex !== null && mobileAboutBlockCenterYWorld > 0) {
         const aboutEl = document.getElementById('projectAboutText');
         if (aboutEl && aboutEl.style.display !== 'none') {
-            const centerY = canvas.height / 2;
+            const centerY = viewH / 2;
             const screenY = (mobileAboutBlockCenterYWorld - centerY) * globalZoomLevel + centerY + cameraPanY;
             const top = screenY - (mobileAboutBlockHeightWorld * globalZoomLevel) / 2;
             aboutEl.style.position = 'fixed';
@@ -5422,22 +5801,54 @@ function draw() {
         }
     }
 
+    // Desktop project view: text block follows the row in the same frame as the images
+    if (!isMobile && alignedEmojiIndex !== null) {
+        updateProjectAboutTextPosition();
+        if (desktopRowActive) maybeUpgradeRowBitmaps(currentTime);
+    }
+
     gifOverlayHideUnused();
+}
+
+// The index and gallery overlays are opaque and cover the whole canvas. Once one has
+// finished fading in there is nothing to see, so the canvas stops redrawing 250+ images
+// per frame behind it.
+let _coverIndexEl = null;
+let _coverGalleryEl = null;
+let _canvasCoveredSince = 0;
+function isCanvasCovered(now) {
+    if (!_coverIndexEl) _coverIndexEl = document.getElementById('projectIndex');
+    if (!_coverGalleryEl) _coverGalleryEl = document.getElementById('projectGallery');
+    const covered =
+        (_coverIndexEl && _coverIndexEl.classList.contains('visible') && !_coverIndexEl.classList.contains('fading-out')) ||
+        (_coverGalleryEl && _coverGalleryEl.classList.contains('visible'));
+    if (!covered) {
+        _canvasCoveredSince = 0;
+        return false;
+    }
+    if (!_canvasCoveredSince) _canvasCoveredSince = now;
+    return now - _canvasCoveredSince > 800; // let the overlay's own fade-in finish first
 }
 
 // Animation loop (pauses when tab hidden to save CPU/battery)
 let _lastDrawTime = 0;
+let _lastFrameTime = 0;
 function animate(timestamp) {
-    if (!document.hidden) {
+    if (timestamp === undefined) timestamp = performance.now();
+    if (document.hidden || isCanvasCovered(timestamp)) {
+        _lastFrameTime = 0; // resume with a normal-length frame
+    } else if (isMobileDevice()) {
         // Cap mobile at 30 fps — halves GPU work, no visible quality loss on touch screens
-        if (isMobileDevice()) {
-            if (timestamp - _lastDrawTime >= 33) { // ~30 fps
-                _lastDrawTime = timestamp;
-                draw();
-            }
-        } else {
+        if (timestamp - _lastDrawTime >= 33) { // ~30 fps
+            _lastDrawTime = timestamp;
+            frameScale = 1; // mobile timings are tuned per drawn frame
             draw();
         }
+    } else {
+        const elapsed = _lastFrameTime ? timestamp - _lastFrameTime : 1000 / 60;
+        _lastFrameTime = timestamp;
+        frameScale = Math.max(0.25, Math.min(3, elapsed / (1000 / 60)));
+        draw();
     }
     requestAnimationFrame(animate);
 }
@@ -5840,16 +6251,9 @@ function showMobileCategoryContent(category) {
     if (mobileAboutInfo) mobileAboutInfo.remove();
     
     // Set category title
-    const categoryLabels = {
-        'we-are': '',
-        'stage': 'visual research',
-        'install': 'spatial design',
-        'tech': 'sonic core',
-        'concept': 'materiality',
-        'spatial': 'perform'
-    };
-    
-    categoryTitle.textContent = categoryLabels[category] || category;
+    const categoryLabels = Object.assign({}, FILTER_TAG_LABELS, { 'we-are': '' });
+    const categoryLabel = categoryLabels[category];
+    categoryTitle.textContent = categoryLabel !== undefined ? t(categoryLabel) : category;
     // "All About" should show only body text (no "we are" heading/sign).
     categoryTitle.style.display = category === 'we-are' ? 'none' : 'block';
     
@@ -5874,7 +6278,7 @@ function showMobileCategoryContent(category) {
         const tag = category;
         filterByTag(tag);
         
-        categoryBody.innerHTML = `<div style="line-height: 1.6; font-size: 14px;">projects</div>`;
+        categoryBody.innerHTML = `<div style="line-height: 1.6; font-size: 14px;">${t('projects')}</div>`;
     }
     
     // Show category content with fade in
@@ -6039,21 +6443,16 @@ function getFolderDisplayTags(folderName) {
     return internalTags.map(t => HASHTAG_DISPLAY[t] || t).filter(Boolean);
 }
 
-// Async: fetch about.txt for all folders and cache in window.__PROJECT_META__
+// Async: read every project's about text (current language) into window.__PROJECT_META__
 function prefetchProjectMeta() {
     if (!window.__PROJECT_META__) window.__PROJECT_META__ = {};
-    const origin = (window.location && window.location.origin) || '';
-    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
+    const cache = window.__PROJECT_META__; // replaced on language switch; late answers for the old one are dropped
     getTopLevelFolders().forEach(folder => {
-        if (window.__PROJECT_META__[folder] !== undefined) return;
-        window.__PROJECT_META__[folder] = null; // mark in-flight
-        const encodedFolder = folder.split('/').map(s => encodeURIComponent(s)).join('/');
-        fetch(origin + pathPrefix + '/img/' + encodedFolder + '/about.txt')
-            .then(r => r.ok ? r.text() : null)
-            .catch(() => null)
-            .then(text => {
-                window.__PROJECT_META__[folder] = parseProjectMeta(folder, text);
-            });
+        if (cache[folder] !== undefined) return;
+        cache[folder] = null; // mark in-flight
+        fetchProjectText(folder, 'about').then(text => {
+            cache[folder] = parseProjectMeta(folder, text);
+        });
     });
 }
 
@@ -6099,6 +6498,8 @@ function parseProjectMeta(folderName, text) {
             const raw = stripParens(pt[1].trim());
             if (raw) projectType = raw.toLowerCase();
         }
+        // Bandcamp-style about files describe a released album and carry no project type
+        if (!projectType && /^album:\s*\S/mi.test(text)) projectType = t('music');
     }
     // First non-poster image in this folder for preview
     const previewPath = imagePaths.find(p => p.startsWith(folderName + '/') && !p.endsWith('_poster.jpg') && !p.endsWith('.gif'));
@@ -6251,7 +6652,7 @@ function renderProjectIndex() {
     hdrName.className = 'project-index-col-hdr-name';
     const hdrType = document.createElement('span');
     hdrType.className = 'project-index-col-hdr-type';
-    hdrType.textContent = 'project type';
+    hdrType.textContent = t('project type');
     colHeader.appendChild(hdrName);
     colHeader.appendChild(hdrType);
     list.appendChild(colHeader);
@@ -6290,7 +6691,7 @@ function renderProjectIndex() {
             typeEl.className = 'project-index-tags';
             const _desc = proj.projectType || proj.tags.join(' · ');
             if (!_desc) {
-                typeEl.textContent = 'wip';
+                typeEl.textContent = t('wip');
                 typeEl.classList.add('project-index-wip');
             } else {
                 typeEl.textContent = _desc;
@@ -6393,8 +6794,7 @@ function showProjectGallery(proj) {
     const typeEl  = document.getElementById('galleryProjectType');
     const fieldsEl = document.getElementById('galleryAboutFields');
     const moreEl  = document.getElementById('galleryMoreText');
-    if (nameEl)  nameEl.textContent  = (proj.name || proj.folderName).toLowerCase();
-    if (typeEl)  typeEl.textContent  = (proj.projectType || '').toLowerCase();
+    renderGalleryHeader(proj);
     if (fieldsEl) fieldsEl.innerHTML = '';
     if (moreEl)  moreEl.textContent  = '';
 
@@ -6428,6 +6828,13 @@ function showProjectGallery(proj) {
         _spawnGalleryImage();
         _galleryNextIdx++;
     }, GALLERY_SPAWN_MS);
+}
+
+function renderGalleryHeader(proj) {
+    const nameEl = document.getElementById('galleryProjectName');
+    const typeEl = document.getElementById('galleryProjectType');
+    if (nameEl) nameEl.textContent = (proj.name || proj.folderName).toLowerCase();
+    if (typeEl) typeEl.textContent = (proj.projectType || '').toLowerCase();
 }
 
 function hideProjectGallery() {
@@ -6540,43 +6947,41 @@ function _galleryNext() {
 }
 
 function _loadGalleryText(proj) {
-    const origin     = (window.location && window.location.origin) || '';
-    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
-    const encoded    = proj.folderName.split('/').map(s => encodeURIComponent(s)).join('/');
-    const base       = origin + pathPrefix + '/img/' + encoded;
+    const folder = proj.folderName;
+    const base = getImgBaseUrl() + '/' + encodeFolderPath(folder);
+    const stillCurrent = () => _galleryCurrentProj && _galleryCurrentProj.folderName === folder;
 
-    fetch(base + '/about.txt')
-        .then(r => r.ok ? r.text() : null).catch(() => null)
-        .then(text => {
-            if (!text) return;
-            const fieldsEl = document.getElementById('galleryAboutFields');
-            if (!fieldsEl) return;
-            fieldsEl.innerHTML = '';
-            const KEYS = ['year', 'location', 'tags'];
-            KEYS.forEach(key => {
-                const m = text.match(new RegExp('^' + key + ':\\s*(.+)', 'mi'));
-                if (!m) return;
-                const val = m[1].trim();
-                if (!val || val === '()') return;
-                const row = document.createElement('div');
-                row.className = 'gallery-about-field';
-                const k = document.createElement('span');
-                k.className = 'gallery-about-key';
-                k.textContent = key;
-                const v = document.createElement('span');
-                v.className = 'gallery-about-val';
-                v.textContent = val.toLowerCase();
-                row.appendChild(k);
-                row.appendChild(v);
-                fieldsEl.appendChild(row);
-            });
+    fetchProjectText(folder, 'about').then(text => {
+        if (!text || !stillCurrent()) return;
+        const fieldsEl = document.getElementById('galleryAboutFields');
+        if (!fieldsEl) return;
+        fieldsEl.innerHTML = '';
+        const KEYS = ['year', 'location', 'tags'];
+        KEYS.forEach(key => {
+            const m = text.match(new RegExp('^' + key + ':\\s*(.+)', 'mi'));
+            if (!m) return;
+            const val = m[1].trim();
+            if (!val || val === '()') return;
+            const row = document.createElement('div');
+            row.className = 'gallery-about-field';
+            const k = document.createElement('span');
+            k.className = 'gallery-about-key';
+            k.textContent = t(key);
+            const v = document.createElement('span');
+            v.className = 'gallery-about-val';
+            v.textContent = val.toLowerCase();
+            row.appendChild(k);
+            row.appendChild(v);
+            fieldsEl.appendChild(row);
         });
+    });
 
     Promise.all([
-        fetch(base + '/more.txt').then(r => r.ok ? r.text() : null).catch(() => null),
-        fetch(base + '/embed.html').then(r => r.ok ? r.text() : null).catch(() => null),
-        fetch(base + '/video.txt').then(r => r.ok ? r.text() : null).catch(() => null),
+        fetchProjectText(folder, 'more'),
+        fetchProjectFile(folder, 'embed.html'),
+        fetchProjectFile(folder, 'video.txt'),
     ]).then(([text, embedHtml, videoText]) => {
+        if (!stillCurrent()) return;
         // Prepend video facade + embed.html (bandcamp iframe) as their own lines, if present.
         const parts = [];
         const video = parseVideoEmbed(videoText);
@@ -6592,12 +6997,22 @@ function _loadGalleryText(proj) {
             });
             moreEl.style.display = '';
         } else if (moreEl) {
+            moreEl.innerHTML = '';
             moreEl.style.display = 'none';
         }
     });
 }
 
 function runAppInit() {
+    // Labels in the stored language, and the EN / FR switches (desktop header + mobile home)
+    applyStaticTranslations();
+    document.querySelectorAll('[data-lang]').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setLocale(el.getAttribute('data-lang'));
+        });
+    });
+
     // Setup gyroscope parallax for mobile
     setupDeviceOrientation();
     
@@ -6728,36 +7143,6 @@ function runAppInit() {
             });
     });
     
-    // EN/FR lang switch
-    const langEn = document.getElementById('langEn');
-    const langFr = document.getElementById('langFr');
-    function updateLangActive() {
-        var locale = typeof window !== 'undefined' ? window.__LOCALE__ : 'en';
-        if (langEn) langEn.style.opacity = locale === 'en' ? '1' : '0.5';
-        if (langFr) langFr.style.opacity = locale === 'fr' ? '1' : '0.5';
-    }
-    if (langEn) {
-        langEn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            if (window.__LOCALE__ === 'en') return;
-            window.__LOCALE__ = 'en';
-            updateLangActive();
-            if (isWeAreMode) showWeAreAbout();
-            else if (currentMobileCategory === 'we-are') showMobileCategoryContent('we-are');
-        });
-    }
-    if (langFr) {
-        langFr.addEventListener('click', function (e) {
-            e.stopPropagation();
-            if (window.__LOCALE__ === 'fr') return;
-            window.__LOCALE__ = 'fr';
-            updateLangActive();
-            if (isWeAreMode) showWeAreAbout();
-            else if (currentMobileCategory === 'we-are') showMobileCategoryContent('we-are');
-        });
-    }
-    updateLangActive();
-
     const filterButtons = document.querySelectorAll('.filter-button');
     filterButtons.forEach(btn => {
         // Prevent mousedown from bubbling to canvas AND clear hover state immediately
@@ -6780,8 +7165,8 @@ function runAppInit() {
                 e.stopPropagation();
                 showWeAreAbout();
             });
-        } else if (btn.id === 'langEn' || btn.id === 'langFr') {
-            // Lang buttons handled above
+        } else if (btn.hasAttribute('data-lang')) {
+            // Language buttons are wired in runAppInit (shared with the mobile toggle)
         } else {
             const tag = btn.getAttribute('data-tag');
             btn.addEventListener('click', (e) => {
@@ -6893,7 +7278,7 @@ function _getMobileProjectPageEl() {
         const mpgBack = document.createElement('button');
         mpgBack.id = 'mpgBackBtn';
         mpgBack.className = 'mpg-back-btn';
-        mpgBack.textContent = 'back';
+        mpgBack.textContent = t('back');
         mpgBack.addEventListener('click', handleMobileCategoryBack);
         el.appendChild(mpgBack);
         document.body.appendChild(el);
@@ -6901,7 +7286,10 @@ function _getMobileProjectPageEl() {
     return el;
 }
 
+let _mobileProjectFolder = null; // project shown on the mobile project page
+
 function showMobileProjectPage(folderPath) {
+    _mobileProjectFolder = folderPath;
     const page = _getMobileProjectPageEl();
     const scroll = document.getElementById('mpgScroll');
     if (!scroll) return;
@@ -6945,18 +7333,14 @@ function showMobileProjectPage(folderPath) {
         }
     }
 
-    // Fetch about.txt + more.txt then render
-    const origin = window.location.origin;
-    const pathPrefix = (window.__BASE_URL__ || '').replace(/\/$/, '');
-    const encodedPath = folderPath.split('/').map(s => encodeURIComponent(s)).join('/');
-    const base = origin + pathPrefix + '/img/' + encodedPath;
-
+    // Read about + more (current language) and embeds, then render
     Promise.all([
-        fetch(base + '/about.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
-        fetch(base + '/more.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
-        fetch(base + '/embed.html').then(r => r.ok ? r.text() : '').catch(() => ''),
-        fetch(base + '/video.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
+        fetchProjectText(folderPath, 'about').then(text => text || ''),
+        fetchProjectText(folderPath, 'more').then(text => text || ''),
+        fetchProjectFile(folderPath, 'embed.html').then(text => text || ''),
+        fetchProjectFile(folderPath, 'video.txt').then(text => text || ''),
     ]).then(([aboutText, moreText, embedHtml, videoText]) => {
+        if (_mobileProjectFolder !== folderPath) return; // another project was opened meanwhile
         if (!document.getElementById('mobileProjectPage')?.classList.contains('visible')) return;
 
         // Parse about.txt
@@ -6966,8 +7350,7 @@ function showMobileProjectPage(folderPath) {
             const parts = aboutText.split('#');
             const nameBlock = parts[0] || '';
             const aboutBlock = parts[1] || aboutText;
-            const nm = nameBlock.match(/name:\s*\(?([^)\n\r]+)\)?/i);
-            if (nm) name = nm[1].trim();
+            name = parseProjectTitle(nameBlock, aboutText, name);
             const labelMap = [
                 { label: 'type',        re: /project\s*type:\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
                 { label: 'year',        re: /year:\s*(?:\(([^)]+)\)|([^\n\r]+))/i },
@@ -7018,7 +7401,7 @@ function showMobileProjectPage(folderPath) {
                 const row = document.createElement('div');
                 row.className = 'mpg-meta-row';
                 const dt = document.createElement('dt');
-                dt.textContent = label;
+                dt.textContent = t(label);
                 const dd = document.createElement('dd');
                 dd.textContent = val;
                 row.appendChild(dt);
@@ -7053,10 +7436,16 @@ function showMobileProjectPage(folderPath) {
         if (more) {
             const moreEl = document.createElement('div');
             moreEl.className = 'mpg-more';
-            more.split(/\r?\n/).filter(Boolean).forEach(line => {
-                const p = document.createElement('p');
-                p.textContent = line;
-                moreEl.appendChild(p);
+            more.split(/\r?\n/).filter(line => line.trim()).forEach(line => {
+                // Player embeds and links get the same treatment as on desktop; plain text
+                // stays a paragraph.
+                if (/<iframe\b|https?:\/\//i.test(line)) {
+                    moreEl.appendChild(makeMoreLineElement(line.trim()));
+                } else {
+                    const p = document.createElement('p');
+                    p.textContent = line;
+                    moreEl.appendChild(p);
+                }
             });
             scroll.appendChild(moreEl);
         }
@@ -7086,6 +7475,7 @@ function showMobileProjectPage(folderPath) {
 function hideMobileProjectPage() {
     const page = document.getElementById('mobileProjectPage');
     if (!page) return;
+    _mobileProjectFolder = null;
     page.classList.remove('visible');
     page.style.display = 'none';
     page.style.backgroundImage = '';
@@ -7103,39 +7493,39 @@ function loadAndDisplayAboutText(folderPath) {
     }
     
     const pathWithoutPrefix = folderPath.replace(/^final images\//, '');
-    const encodedPath = pathWithoutPrefix.split('/').map(segment => encodeURIComponent(segment)).join('/');
-    const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
-    const pathPrefix = (typeof window !== 'undefined' && window.__BASE_URL__) ? window.__BASE_URL__.replace(/\/$/, '') : '';
-    const base = origin + pathPrefix + '/img/' + encodedPath.replace(/^\//, '');
-    const aboutUrl = base + '/about.txt';
-    const moreUrl = base + '/more.txt';
-    const extraUrl = base + '/extra.txt';
-    
-    const aboutPromise = fetch(aboutUrl).then(r => r.ok ? r.text() : Promise.reject(new Error('about')));
-    const morePromise = fetch(moreUrl).then(r => r.ok ? r.text() : null).catch(() => null);
-    const extraPromise = fetch(extraUrl).then(r => r.ok ? r.text() : null).catch(() => null);
-    const bcPromise = fetch(base + '/bandcamp.txt').then(r => r.ok ? r.text() : null).catch(() => null);
-    const embedPromise = fetch(base + '/embed.html').then(r => r.ok ? r.text() : null).catch(() => null);
-    const videoPromise = fetch(base + '/video.txt').then(r => r.ok ? r.text() : null).catch(() => null);
-    Promise.all([aboutPromise, morePromise, extraPromise, bcPromise, embedPromise, videoPromise])
-        .then(([aboutText, moreText, extraText, bcText, embedHtml, videoText]) => {
-            // Prepend video facade + embed.html (bandcamp iframe) to more content if present.
-            const moreParts = [];
-            const video = parseVideoEmbed(videoText);
-            if (video) moreParts.push('[[VIDEO:' + video.src + '|||' + base + '/cover.jpg]]');
-            if (embedHtml && embedHtml.trim()) moreParts.push(embedHtml.trim().replace(/\s+/g, ' '));
-            const rawMore = (moreText && moreText.trim()) || (extraText && extraText.trim()) || '';
-            if (rawMore) moreParts.push(rawMore);
-            const moreContent = moreParts.length ? moreParts.join('\n') : null;
-            parseAndDisplayAboutText(aboutText, moreContent);
-            if (bcText && bcText.trim()) {
-                if (!window.__BC_URLS__) window.__BC_URLS__ = {};
-                window.__BC_URLS__[pathWithoutPrefix] = bcText.trim();
-            }
-        })
-        .catch(() => {
+    const base = getImgBaseUrl() + '/' + encodeFolderPath(pathWithoutPrefix);
+    const requestedLocale = getLocale();
+
+    Promise.all([
+        fetchProjectText(pathWithoutPrefix, 'about'),
+        fetchProjectText(pathWithoutPrefix, 'more'),
+        fetchProjectText(pathWithoutPrefix, 'extra'),
+        fetchProjectFile(pathWithoutPrefix, 'bandcamp.txt'),
+        fetchProjectFile(pathWithoutPrefix, 'embed.html'),
+        fetchProjectFile(pathWithoutPrefix, 'video.txt'),
+    ]).then(([aboutText, moreText, extraText, bcText, embedHtml, videoText]) => {
+        // The answer is stale if another project was opened or the language changed meanwhile
+        if (alignedFolderPath !== folderPath || getLocale() !== requestedLocale) return;
+        if (!aboutText) {
             displayProjectAboutText('~', [], null);
-        });
+            return;
+        }
+        // Prepend video facade + embed.html (bandcamp iframe) to more content if present.
+        const moreParts = [];
+        const video = parseVideoEmbed(videoText);
+        if (video) moreParts.push('[[VIDEO:' + video.src + '|||' + base + '/cover.jpg]]');
+        if (embedHtml && embedHtml.trim()) moreParts.push(embedHtml.trim().replace(/\s+/g, ' '));
+        const rawMore = (moreText && moreText.trim()) || (extraText && extraText.trim()) || '';
+        if (rawMore) moreParts.push(rawMore);
+        const moreContent = moreParts.length ? moreParts.join('\n') : null;
+        parseAndDisplayAboutText(aboutText, moreContent);
+        if (bcText && bcText.trim()) {
+            if (!window.__BC_URLS__) window.__BC_URLS__ = {};
+            window.__BC_URLS__[pathWithoutPrefix] = bcText.trim();
+        }
+    }).catch(() => {
+        if (alignedFolderPath === folderPath) displayProjectAboutText('~', [], null);
+    });
 }
 
 // Parse about.txt content for mobile display (same label map as desktop)
@@ -7221,7 +7611,7 @@ function displayMobileAboutText(name, aboutLines) {
     aboutLines.forEach((line, index) => {
         const lineEl = document.createElement('div');
         lineEl.className = 'mobile-about-line';
-        lineEl.textContent = `${line.label}: ${line.value}`;
+        lineEl.textContent = labelValue(line.label, line.value);
         lineEl.style.cssText = `
             opacity: 0;
             transition: opacity 0.25s ease-out;
@@ -7287,16 +7677,9 @@ function parseAndDisplayAboutText(text, moreText) {
     const nameBlock = parts[0].trim();
     const aboutBlock = parts.length >= 2 ? parts[1].trim() : text;
     
-    // Extract name (with or without parentheses)
-    let name = '~';
-    const nameMatchWithParens = nameBlock.match(/(?:name|Name):\s*\(([^)]+)\)/i);
-    const nameMatchWithoutParens = nameBlock.match(/(?:name|Name):\s*([^\n\r]+)/i);
-    
-    if (nameMatchWithParens) {
-        name = nameMatchWithParens[1].trim();
-    } else if (nameMatchWithoutParens) {
-        name = nameMatchWithoutParens[1].trim();
-    }
+    // Title: "name:" line, or the album title for Bandcamp-style files, or the folder name
+    const folderTitle = alignedFolderPath ? (alignedFolderPath.split('/').pop() || '').replace(/\s*#.*$/, '').trim() : '';
+    const name = parseProjectTitle(nameBlock, text, folderTitle || '~');
     
     // Extract about lines: map file labels to display labels (supports parentheses or plain value)
     const aboutLines = [];
@@ -7329,59 +7712,37 @@ function parseAndDisplayAboutText(text, moreText) {
         const fileLabel = colonMatch[1].trim().toLowerCase().replace(/\s+/g, ' ');
         const value = colonMatch[2].trim();
         if (!value) return;
+        if (fileLabel === 'name') return; // already shown as the title (files without a "#" separator)
         aboutLines.push({ label: fileLabel, value: value });
     });
     
     displayProjectAboutText(name, aboutLines, moreText || null);
 }
 
-// Build a .more-line div from a text line — URLs become clickable <a> elements.
-// Strips leading >>> markers from URL-only lines.
-// Fetch Bandcamp oEmbed via JSONP (bypasses CORS; Bandcamp supports format=js&callback=).
-// Returns { src, height } for the iframe player, or null on failure.
-function fetchBandcampEmbedSrc(url) {
-    return new Promise(resolve => {
-        const cbName = '__bcOembed_' + Math.random().toString(36).slice(2);
-        let script;
-        const cleanup = () => {
-            delete window[cbName];
-            if (script && script.parentNode) script.parentNode.removeChild(script);
-        };
-        const timer = setTimeout(() => { cleanup(); resolve(null); }, 6000);
-
-        window[cbName] = (data) => {
-            clearTimeout(timer);
-            cleanup();
-            if (!data || !data.html) return resolve(null);
-            const srcMatch = data.html.match(/src="([^"]+)"/);
-            if (!srcMatch) return resolve(null);
-            let src = srcMatch[1];
-            src = src.replace(/bgcol=[a-fA-F0-9]+/, 'bgcol=000000')
-                      .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8')
-                      .replace(/size=large/, 'size=small')
-                      .replace(/size=medium/, 'size=small')
-                      .replace(/artwork=small\//, '')
-                      .replace(/artwork=large\//, '');
-            if (!src.includes('transparent=')) src = src.replace(/\/?$/, '/') + 'transparent=true/';
-            resolve({ src, height: 42 });
-        };
-
-        script = document.createElement('script');
-        script.onerror = () => { clearTimeout(timer); cleanup(); resolve(null); };
-        script.src = 'https://bandcamp.com/api/oembed?url=' + encodeURIComponent(url) +
-                     '&format=js&callback=' + cbName;
-        document.head.appendChild(script);
-    });
+// Height a Bandcamp player needs for the layout encoded in its URL. Embed codes pasted into
+// more.txt carry their own height, but it has to agree with the layout or the player is
+// either cut off or leaves a blank band under it.
+function bandcampPlayerHeight(src, declaredHeight) {
+    if (/\/size=small\//.test(src)) return 42;                      // slim one-line player
+    if (/\/tracklist=false\//.test(src) && /\/artwork=small\//.test(src)) return 120; // artwork + transport, no list
+    if (/\/artwork=small\//.test(src) && !declaredHeight) return 120;
+    return declaredHeight || 120;
 }
 
 function makeBandcampIframe(src, height) {
-    // Re-skin to dark theme only; preserve size/artwork from caller
+    // Re-skin to the dark theme; keep the caller's size / artwork choice
     src = src.replace(/bgcol=[a-fA-F0-9]+/, 'bgcol=000000')
              .replace(/linkcol=[a-fA-F0-9]+/, 'linkcol=c8c8c8');
+    // Large players all use the same compact layout (artwork + transport, no track list —
+    // the text beside them already lists the tracks), so every project looks alike.
+    if (/\/size=large\//.test(src) && !/\/tracklist=/.test(src)) {
+        src = src.replace(/\/size=large\//, '/size=large/tracklist=false/');
+    }
     if (!src.includes('transparent=')) src = src.replace(/\/?$/, '/') + 'transparent=true/';
     const iframe = document.createElement('iframe');
     iframe.src = src;
-    iframe.style.cssText = 'border:0;width:100%;height:' + (height || 120) + 'px;display:block;';
+    iframe.title = 'Bandcamp player';
+    iframe.style.cssText = 'border:0;width:100%;height:' + bandcampPlayerHeight(src, height) + 'px;display:block;';
     iframe.setAttribute('seamless', '');
     iframe.setAttribute('loading', 'lazy');
     return iframe;
@@ -7415,7 +7776,7 @@ function openVideoLightbox(embedSrc) {
         frameWrap.className = 'video-lightbox-frame';
         const closeBtn = document.createElement('button');
         closeBtn.className = 'video-lightbox-close';
-        closeBtn.setAttribute('aria-label', 'Close video');
+        closeBtn.setAttribute('aria-label', t('Close video'));
         closeBtn.innerHTML = '&times;';
         frameWrap.appendChild(closeBtn);
         const inner = document.createElement('div');
@@ -7449,7 +7810,7 @@ function makeVideoFacade(embedSrc, posterUrl) {
     if (posterUrl) facade.style.backgroundImage = 'url("' + posterUrl + '")';
     const btn = document.createElement('button');
     btn.className = 'video-facade-play';
-    btn.setAttribute('aria-label', 'Play video');
+    btn.setAttribute('aria-label', t('Play video'));
     btn.innerHTML = '<span class="video-facade-tri"></span>';
     facade.appendChild(btn);
     facade.addEventListener('click', () => openVideoLightbox(embedSrc));
@@ -7474,8 +7835,8 @@ function makeMoreLineElement(lineText) {
     // 1. Bandcamp <iframe> embed code pasted directly — extract src and re-skin
     const iframeMatch = lineText.match(/<iframe[^>]+src="(https:\/\/bandcamp\.com\/EmbeddedPlayer\/[^"]+)"[^>]*>/i);
     if (iframeMatch) {
-        const heightMatch = lineText.match(/height[=:]["']?(\d+)/i);
-        el.appendChild(makeBandcampIframe(iframeMatch[1], heightMatch ? +heightMatch[1] : 120));
+        const heightMatch = lineText.match(/height\s*[=:]\s*["']?\s*(\d+)/i);
+        el.appendChild(makeBandcampIframe(iframeMatch[1], heightMatch ? +heightMatch[1] : 0));
         el.classList.add('bandcamp-embed-line');
         return el;
     }
@@ -7489,21 +7850,16 @@ function makeMoreLineElement(lineText) {
 
         const isBandcamp = url.includes('bandcamp.com');
 
-        // 2. Bandcamp URL — show slim player via oEmbed; fall back to text link on failure
+        // 2. Plain Bandcamp URL — a link out. (A player needs Bandcamp's numeric album id,
+        //    which a page on another site cannot look up: paste the album's embed code
+        //    into more.txt to get a player, as in case 1.)
         if (isBandcamp) {
-            el.classList.add('bandcamp-embed-line');
-            fetchBandcampEmbedSrc(url).then(result => {
-                if (result) {
-                    el.appendChild(makeBandcampIframe(result.src, 42));
-                } else {
-                    const a = document.createElement('a');
-                    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-                    a.className = 'more-link more-link-bandcamp';
-                    try { a.textContent = new URL(url).pathname.split('/').filter(Boolean).pop() + ' ↗ (bandcamp)'; }
-                    catch { a.textContent = 'bandcamp ↗'; }
-                    el.appendChild(a);
-                }
-            });
+            const a = document.createElement('a');
+            a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+            a.className = 'more-link more-link-bandcamp';
+            try { a.textContent = (new URL(url).pathname.split('/').filter(Boolean).pop() || new URL(url).hostname.split('.')[0]) + ' ↗ (bandcamp)'; }
+            catch { a.textContent = 'bandcamp ↗'; }
+            el.appendChild(a);
             return el;
         }
 
@@ -7547,7 +7903,7 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
             const url = urlMatch[0].replace(/[.,;:!)]+$/, '');
             const before = line.value.slice(0, urlMatch.index);
             const after  = line.value.slice(urlMatch.index + urlMatch[0].length);
-            lineEl.appendChild(document.createTextNode(`${line.label}: ${before}`));
+            lineEl.appendChild(document.createTextNode(labelValue(line.label, before)));
             const a = document.createElement('a');
             a.href = url;
             a.target = '_blank';
@@ -7560,7 +7916,7 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
             lineEl.appendChild(a);
             if (after) lineEl.appendChild(document.createTextNode(after));
         } else {
-            lineEl.textContent = `${line.label}: ${line.value}`;
+            lineEl.textContent = labelValue(line.label, line.value);
         }
         lineEl.style.opacity = '0';
         lineEl.style.transition = aboutTransition;
@@ -7574,6 +7930,8 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
     if (moreEl) {
         if (moreContent && moreContent.trim()) {
             moreEl.innerHTML = '';
+            moreEl.scrollTop = 0; // the block is reused between projects
+            moreEl.classList.remove('has-more-below');
             moreEl.style.display = 'block';
             moreEl.style.visibility = 'visible';
             // more.txt: line-by-line fade-in (same as about.txt)
@@ -7636,147 +7994,140 @@ function displayProjectAboutText(name, aboutLines, moreContent) {
     }
     void containerEl.offsetHeight;
     
-    // Update position every frame (desktop only; mobile positioning is in draw())
-    if (window.updateProjectAboutTextPos) {
-        cancelAnimationFrame(window.updateProjectAboutTextPos);
-    }
-    
-    if (!isMobileDevice()) {
-        const updatePosition = () => {
-            if (alignedEmojis && alignedEmojis.length > 0) {
-                updateProjectAboutTextPosition(containerEl, nameEl, infoEl);
-                window.updateProjectAboutTextPos = requestAnimationFrame(updatePosition);
-            } else {
-                if (window.updateProjectAboutTextPos) {
-                    cancelAnimationFrame(window.updateProjectAboutTextPos);
-                    window.updateProjectAboutTextPos = null;
-                }
-            }
-        };
-        updatePosition();
-    }
+    // Desktop position is refreshed from draw() every frame; reset the per-project caches
+    aboutHasMoreContent = !!(moreContent && moreContent.trim());
+    aboutInfoWidthMeasuredAt = 0;
+    [containerEl, nameEl, infoEl, moreEl].forEach(el => { if (el) el.__styleCache = null; });
+    if (!isMobileDevice()) updateProjectAboutTextPosition();
 }
 
-// Update project about text position based on aligned images (desktop + mobile)
-function updateProjectAboutTextPosition(containerEl, nameEl, infoEl) {
-    if (!alignedEmojis || alignedEmojis.length === 0) {
-        return;
+// Cached state for the desktop project text block
+let aboutHasMoreContent = false;
+let aboutInfoWidthPx = 0;
+let aboutInfoWidthMeasuredAt = 0;
+let aboutMoreOverflowCheckedAt = 0;
+let aboutEls = null;
+
+// Write a style only when its value changed (this runs every frame)
+function setStyleIfChanged(el, prop, value) {
+    const cache = el.__styleCache || (el.__styleCache = {});
+    if (cache[prop] === value) return;
+    cache[prop] = value;
+    el.style[prop] = value;
+}
+
+// Position the project text block around the row (desktop). Called from draw() so text
+// and images move in the same frame.
+function updateProjectAboutTextPosition() {
+    if (!alignedEmojis || alignedEmojis.length === 0) return;
+    if (isMobileDevice()) return; // mobile positioning is handled in draw() using world coords
+
+    if (!aboutEls || !aboutEls.containerEl.isConnected) {
+        const containerEl = document.getElementById('projectAboutText');
+        const nameEl = document.getElementById('projectName');
+        const infoEl = document.getElementById('projectInfo');
+        if (!containerEl || !nameEl || !infoEl) return;
+        aboutEls = { containerEl, nameEl, infoEl, moreEl: document.getElementById('projectMore') };
     }
-    
+    const { containerEl, nameEl, infoEl, moreEl } = aboutEls;
+    if (containerEl.style.display === 'none') return;
+
     const firstImage = alignedEmojis[0];
-    const lastImage = alignedEmojis[alignedEmojis.length - 1];
-    
-    if (!firstImage || !lastImage) {
-        return;
-    }
-    
-    // Mobile: positioning handled by draw() using world coords
-    if (isMobileDevice()) return;
+    if (!firstImage) return;
 
     const zoom = globalZoomLevel;
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    
-    // Get image dimensions for first image
+    const centerX = viewW / 2;
+    const centerY = viewH / 2;
+    const margin = 20;
+    const textGap = 15;
+
+    // First image box in screen space
     const firstImageData = imageCache[firstImage.imagePath];
     const firstImageHeight = firstImage.currentSize || firstImage.targetSize || baseEmojiSize;
     const firstImageAspectRatio = (firstImageData && firstImageData.aspectRatio) ? firstImageData.aspectRatio : 1;
     const firstImageWidth = firstImageHeight * firstImageAspectRatio;
-    
-    // Calculate screen positions (depend on cameraPan → scrolls with content)
     const firstImageCenterX = firstImage.currentAlignedX || firstImage.targetX || 0;
     const firstImageCenterY = firstImage.currentAlignedY || firstImage.targetY || 0;
-    const firstImageTopY = firstImageCenterY - (firstImageHeight / 2);
-    const firstImageLeftX = firstImageCenterX - (firstImageWidth / 2);
-    const firstImageRightX = firstImageCenterX + (firstImageWidth / 2);
-    
-    let firstImageTopScreenY = ((firstImageTopY - centerY) * zoom) + centerY + cameraPanY;
-    let firstImageLeftScreenX = ((firstImageLeftX - centerX) * zoom) + centerX + cameraPanX;
-    let firstImageRightScreenX = ((firstImageRightX - centerX) * zoom) + centerX + cameraPanX;
-    const margin = 20;
-    const maxLeft = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth - 300 : 400;
-    firstImageLeftScreenX = Math.max(margin, Math.min(maxLeft, firstImageLeftScreenX));
-    firstImageRightScreenX = Math.max(firstImageLeftScreenX + 50, Math.min((window.innerWidth || 800) - margin, firstImageRightScreenX));
-    firstImageTopScreenY = Math.max(margin, Math.min((window.innerHeight || 600) - margin, firstImageTopScreenY));
-    
-    // Get image dimensions for last image (desktop)
-    const lastImageData = imageCache[lastImage.imagePath];
-    const lastImageHeight = lastImage.currentSize || lastImage.targetSize || baseEmojiSize;
-    const lastImageAspectRatio = (lastImageData && lastImageData.aspectRatio) ? lastImageData.aspectRatio : 1;
-    const lastImageWidth = lastImageHeight * lastImageAspectRatio;
-    
-    const lastImageCenterY = lastImage.currentAlignedY || lastImage.targetY || 0;
-    const lastImageBottomY = lastImageCenterY + (lastImageHeight / 2);
-    let lastImageBottomScreenY = ((lastImageBottomY - centerY) * zoom) + centerY + cameraPanY;
-    lastImageBottomScreenY = Math.max(firstImageTopScreenY + 40, Math.min((window.innerHeight || 600) - margin, lastImageBottomScreenY));
-    
-    {
-        // Desktop: align about block to left edge of first image; smooth Y during phase 2/0 to avoid jitter
-        const textGap = 15;
-        const firstImageBottomScreenY = firstImageTopScreenY + (firstImageHeight * zoom);
-        const screenHeight = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600;
-        const screenW = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1200;
-        const screenH = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600;
-        // After selection animation completes (phase 0): fix X so text only moves on Y when images pan
-        const animationComplete = selectionAnimationPhase === 0;
-        let aboutLeftPx;
-        if (animationComplete && selectionAboutFixedLeftPx != null) {
-            aboutLeftPx = selectionAboutFixedLeftPx;
+
+    let firstImageTopScreenY = ((firstImageCenterY - firstImageHeight / 2 - centerY) * zoom) + centerY + cameraPanY;
+    let firstImageLeftScreenX = ((firstImageCenterX - firstImageWidth / 2 - centerX) * zoom) + centerX + cameraPanX;
+    firstImageLeftScreenX = Math.max(margin, Math.min(viewW - 300, firstImageLeftScreenX));
+    firstImageTopScreenY = Math.max(margin, Math.min(viewH - margin, firstImageTopScreenY));
+    const firstImageBottomScreenY = firstImageTopScreenY + (firstImageHeight * zoom);
+
+    // Once the entry move has finished the block's X is fixed; only Y follows the row
+    const animationComplete = selectionAnimationPhase === 0;
+    let aboutLeftPx;
+    if (animationComplete && selectionAboutFixedLeftPx != null) {
+        aboutLeftPx = selectionAboutFixedLeftPx;
     } else {
-            aboutLeftPx = Math.round(firstImageLeftScreenX);
-            if (animationComplete) selectionAboutFixedLeftPx = aboutLeftPx;
-        }
-        const rawNameBottom = screenHeight - firstImageTopScreenY + textGap;
-        const rawInfoTop = firstImageBottomScreenY + textGap;
-        const rawMoreTop = firstImageBottomScreenY + textGap;
-        const duringPhase = selectionAnimationPhase !== 0;
-        const smoothFactor = duringPhase ? 0.1 : 0.22;
-        if (aboutSmoothedNameBottomPx == null) {
-            aboutSmoothedNameBottomPx = rawNameBottom;
-            aboutSmoothedInfoTopPx = rawInfoTop;
-            aboutSmoothedMoreTopPx = rawMoreTop;
-        } else {
-            aboutSmoothedNameBottomPx += (rawNameBottom - aboutSmoothedNameBottomPx) * smoothFactor;
-            aboutSmoothedInfoTopPx += (rawInfoTop - aboutSmoothedInfoTopPx) * smoothFactor;
-            aboutSmoothedMoreTopPx += (rawMoreTop - aboutSmoothedMoreTopPx) * smoothFactor;
-        }
-        nameEl.style.position = 'fixed';
-        nameEl.style.left = `${aboutLeftPx}px`;
-        nameEl.style.right = 'auto';
-        nameEl.style.top = 'auto';
-        nameEl.style.bottom = `${Math.round(aboutSmoothedNameBottomPx)}px`;
-        nameEl.style.textAlign = 'left';
-        
-        infoEl.style.position = 'fixed';
-        infoEl.style.left = `${aboutLeftPx}px`;
-        infoEl.style.right = 'auto';
-        infoEl.style.top = `${Math.round(aboutSmoothedInfoTopPx)}px`;
-        infoEl.style.textAlign = 'left';
-        
-        const moreEl = document.getElementById('projectMore');
-        if (moreEl && moreEl.style.display === 'block' && moreEl.textContent.trim()) {
-            const gap = 24;
-            const marginRight = 48;
-            let redZoneLeft = Math.max(aboutLeftPx + (infoEl.offsetWidth || 0) + gap, screenW * 0.38);
-            if (animationComplete && selectionMoreFixedLeftPx != null) redZoneLeft = selectionMoreFixedLeftPx;
-            else if (animationComplete) selectionMoreFixedLeftPx = redZoneLeft;
-            const redZoneWidth = Math.max(200, screenW - redZoneLeft - marginRight);
-            const redZoneHeight = Math.max(180, screenH - Math.round(aboutSmoothedMoreTopPx) - textGap - 100);
-            moreEl.style.position = 'fixed';
-            moreEl.style.left = `${redZoneLeft}px`;
-            moreEl.style.right = 'auto';
-            moreEl.style.top = `${Math.round(aboutSmoothedMoreTopPx)}px`;
-            moreEl.style.width = `${redZoneWidth}px`;
-            moreEl.style.maxHeight = `${redZoneHeight}px`;
-            moreEl.style.fontSize = '14px';
-            moreEl.style.textAlign = 'left';
-            moreEl.style.overflowY = 'auto';
-        }
-        
-        containerEl.style.position = 'fixed';
-        containerEl.style.left = `${aboutLeftPx}px`;
-        containerEl.style.right = 'auto';
+        aboutLeftPx = Math.round(firstImageLeftScreenX);
+        if (animationComplete) selectionAboutFixedLeftPx = aboutLeftPx;
     }
+
+    const rawNameBottom = viewH - firstImageTopScreenY + textGap;
+    const rawInfoTop = firstImageBottomScreenY + textGap;
+    if (aboutSmoothedNameBottomPx == null) {
+        aboutSmoothedNameBottomPx = rawNameBottom;
+        aboutSmoothedInfoTopPx = rawInfoTop;
+        aboutSmoothedMoreTopPx = rawInfoTop;
+    } else {
+        const ease = damp(animationComplete ? 0.22 : 0.1);
+        aboutSmoothedNameBottomPx += (rawNameBottom - aboutSmoothedNameBottomPx) * ease;
+        aboutSmoothedInfoTopPx += (rawInfoTop - aboutSmoothedInfoTopPx) * ease;
+        aboutSmoothedMoreTopPx += (rawInfoTop - aboutSmoothedMoreTopPx) * ease;
+    }
+
+    setStyleIfChanged(nameEl, 'position', 'fixed');
+    setStyleIfChanged(nameEl, 'left', aboutLeftPx + 'px');
+    setStyleIfChanged(nameEl, 'right', 'auto');
+    setStyleIfChanged(nameEl, 'top', 'auto');
+    setStyleIfChanged(nameEl, 'bottom', Math.round(aboutSmoothedNameBottomPx) + 'px');
+    setStyleIfChanged(nameEl, 'textAlign', 'left');
+
+    setStyleIfChanged(infoEl, 'position', 'fixed');
+    setStyleIfChanged(infoEl, 'left', aboutLeftPx + 'px');
+    setStyleIfChanged(infoEl, 'right', 'auto');
+    setStyleIfChanged(infoEl, 'top', Math.round(aboutSmoothedInfoTopPx) + 'px');
+    setStyleIfChanged(infoEl, 'textAlign', 'left');
+
+    if (moreEl && aboutHasMoreContent) {
+        // Measuring forces layout, so do it a few times a second, not every frame
+        const now = performance.now();
+        if (now - aboutInfoWidthMeasuredAt > 250) {
+            aboutInfoWidthMeasuredAt = now;
+            aboutInfoWidthPx = infoEl.offsetWidth || 0;
+        }
+        const gap = 24;
+        const marginRight = 48;
+        const bottomMargin = 28;
+        let moreLeft = Math.max(aboutLeftPx + aboutInfoWidthPx + gap, viewW * 0.38);
+        if (animationComplete && selectionMoreFixedLeftPx != null) moreLeft = selectionMoreFixedLeftPx;
+        else if (animationComplete) selectionMoreFixedLeftPx = moreLeft;
+        const moreTop = Math.round(aboutSmoothedMoreTopPx);
+        const moreWidth = Math.max(200, viewW - moreLeft - marginRight);
+        // The block ends just above the bottom edge and scrolls inside itself when the
+        // text (or a player + tracklist) is longer than that.
+        const moreHeight = Math.max(120, viewH - moreTop - bottomMargin);
+        if (now - aboutMoreOverflowCheckedAt > 250) {
+            aboutMoreOverflowCheckedAt = now;
+            const moreBelow = moreEl.scrollHeight - moreEl.clientHeight - moreEl.scrollTop > 2;
+            if (moreEl.classList.contains('has-more-below') !== moreBelow) moreEl.classList.toggle('has-more-below', moreBelow);
+        }
+        setStyleIfChanged(moreEl, 'position', 'fixed');
+        setStyleIfChanged(moreEl, 'left', Math.round(moreLeft) + 'px');
+        setStyleIfChanged(moreEl, 'right', 'auto');
+        setStyleIfChanged(moreEl, 'top', moreTop + 'px');
+        setStyleIfChanged(moreEl, 'width', Math.round(moreWidth) + 'px');
+        setStyleIfChanged(moreEl, 'maxHeight', Math.round(moreHeight) + 'px');
+        setStyleIfChanged(moreEl, 'fontSize', '14px');
+        setStyleIfChanged(moreEl, 'textAlign', 'left');
+        setStyleIfChanged(moreEl, 'overflowY', 'auto');
+    }
+
+    setStyleIfChanged(containerEl, 'position', 'fixed');
+    setStyleIfChanged(containerEl, 'left', aboutLeftPx + 'px');
+    setStyleIfChanged(containerEl, 'right', 'auto');
 }
 
 // Hide project about text (fade out in 0.1s when clicking back from selection)
@@ -7810,10 +8161,7 @@ function hideProjectAboutText() {
         containerEl.style.display = 'none';
     }, 100);
     
-    if (window.updateProjectAboutTextPos) {
-        cancelAnimationFrame(window.updateProjectAboutTextPos);
-        window.updateProjectAboutTextPos = null;
-    }
+    aboutHasMoreContent = false;
 }
 
 // Create elements on DOM ready
@@ -7830,28 +8178,82 @@ animate();
     console.error('Cannot start animation: canvas or context not available');
 }
 
+// Rest size / opacity for freshly generated grid points
+function initGridPointDefaults(list) {
+    list.forEach(point => {
+        const size = point.layer === 'layer_1' ? baseEmojiSize : baseEmojiSize * layer2SizeMultiplier;
+        point.targetSize = size;
+        point.currentSize = size;
+        point.startSize = size;
+        point.opacity = 1.0;
+        point.targetOpacity = 1.0;
+        point.hoverSize = 1.0;
+        point.isHovered = false;
+        point.hoverStartTime = 0;
+    });
+}
+
 // Redraw on resize
 let resizeRaf = 0;
 window.addEventListener('resize', () => {
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     resizeRaf = requestAnimationFrame(() => {
         resizeRaf = 0;
-    canvasBoundingRect = null;
-    resizeCanvas();
+        canvasBoundingRect = null;
+        const previousW = viewW;
+        const previousH = viewH;
+        resizeCanvas();
         // Invalidate mobile detection cache on resize
         if (draw._isMobileCached !== undefined) {
             draw._isMobileCached = undefined;
         }
+        // Mobile browsers fire resize when the address bar slides; a same-size "resize"
+        // must not reshuffle the grid.
+        if (Math.abs(previousW - viewW) < 1 && Math.abs(previousH - viewH) < 1) return;
+
+        const openFolder = (!isMobileDevice() && alignedEmojiIndex !== null) ? alignedFolderPath : null;
+        const openFolderInactive = openFolder !== null && alignedEmojis.some(p => p.isInactive);
+
         // Regenerate points for new canvas size (debounced to avoid thrash while resizing)
-    const newPoints = generatePoints(Math.min(imagePaths.length, 500), 50);
-    points.length = 0;
-    points.push(...newPoints);
-    precomputeConnectionTrajectories(); // Recompute so dotted-line hover uses current point refs
-    // Update mouse position
-    targetMouseX = canvas.width / 2;
-    targetMouseY = canvas.height / 2;
-    smoothMouseX = targetMouseX;
-    smoothMouseY = targetMouseY;
+        const newPoints = generatePoints(Math.min(imagePaths.length, 500), 50);
+        initGridPointDefaults(newPoints);
+        points.length = 0;
+        points.push(...newPoints);
+        precomputeConnectionTrajectories(); // Recompute so dotted-line hover uses current point refs
+        hoveredPoint = null;
+        hoverStartTime = 0;
+        hoveredConnectedPoints = [];
+        hoveredLinesOpacity = 0.0;
+        if (isMobileVersion) points.forEach(p => { p.isInactive = true; });
+
+        if (isConnectionMode) exitConnectionMode();
+        if (activeTags.size > 0) applyTagFilters();
+
+        if (openFolder !== null) {
+            // A project is open: rebuild its row from the new points, in place (no animation)
+            const folderPoints = points.filter(p => (p.folderPath || normalizeFolderPathFromImagePath(p.imagePath)) === openFolder);
+            alignedEmojis = mergeFolderImagesWithAllPaths(openFolder, folderPoints);
+            alignedEmojiIndex = folderPoints.length ? folderPoints[0].emojiIndex : 1;
+            points.forEach(p => {
+                if (folderPoints.includes(p)) {
+                    p.isInactive = openFolderInactive;
+                } else {
+                    p.opacity = 0.0;
+                    p.targetOpacity = 0.0;
+                    p.isInactive = true;
+                }
+            });
+            aboutSmoothedNameBottomPx = null;
+            layoutAlignedEmojisDesktop(false, true);
+        } else if (isIndexMode && !isMobileDevice()) {
+            points.forEach(p => { p.opacity = 0.0; p.targetOpacity = 0.0; p.isInactive = true; });
+        }
+
+        // Update mouse position
+        targetMouseX = viewW / 2;
+        targetMouseY = viewH / 2;
+        smoothMouseX = targetMouseX;
+        smoothMouseY = targetMouseY;
     });
 });
 

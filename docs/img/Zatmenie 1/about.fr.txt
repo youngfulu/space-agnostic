@@ -1,0 +1,5 @@
+name: (Zatmenie)
+#
+Project type: (animation étendue, performance)
+year: (2018)
+Contributor: Ilya Duganov, Alinna Tikhonova  

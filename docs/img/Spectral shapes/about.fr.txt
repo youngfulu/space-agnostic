@@ -1,0 +1,3 @@
+name: (Spectral shapes)
+Project type: Recherche, Sculpture, Visualisation de données sonores
+Year: 2021 

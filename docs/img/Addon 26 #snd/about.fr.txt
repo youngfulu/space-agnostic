@@ -1,0 +1,7 @@
+name: (Addon 26)
+#
+Project type: (Installation / Audio spatial)
+year: (2025)
+Location: Paris, France.
+Status: (Terminé)
+Contributor: (Ilya Duganov, Alnx, Rustem Imamiev)

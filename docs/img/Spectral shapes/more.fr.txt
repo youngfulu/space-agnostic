@@ -1,0 +1,6 @@
+
+À quoi ressemblerait la propriété acoustique d'un espace si elle prenait une forme physique ?
+Ce projet de recherche explore la perception intermodale et le potentiel esthétique de la transformation de données sonores en objets tangibles.
+Des réponses impulsionnelles en haute résolution (l'écho audible d'un espace physique), enregistrées pendant la rénovation de l'ancienne salle des machines d'une centrale électrique, ont été converties en tableaux de données brutes à l'aide de la bibliothèque MuBu développée à l'IRCAM. Ces jeux de données numériques ont ensuite été traités par diverses méthodes et outils logiciels pour générer plusieurs interprétations visuelles du son d'origine.
+Le résultat final a pris la forme d'une série d'objets physiques : des sculptures, des tirages photo et une documentation étendue de la méthode de recherche.
+Le projet a été commandé par la Fondation V-A-C en 2021.
